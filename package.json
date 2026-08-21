@@ -1,0 +1,21 @@
+{
+  "name": "ecommerce-project",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Custom single-vendor multi-product ecommerce platform (storefront + admin + API).",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run start:dev --workspace @ecommerce/api",
+    "dev:storefront": "npm run dev --workspace @ecommerce/storefront",
+    "dev:admin": "npm run dev --workspace @ecommerce/admin",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

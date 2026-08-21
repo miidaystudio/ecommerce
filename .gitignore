@@ -1,0 +1,51 @@
+# --- Project source-of-truth docs (kept out of the committed app, tracked separately) ---
+prd.md
+arc.md
+rule.md
+phase.md
+design.md
+memory.md
+*.agent/
+.agents/
+
+# --- Dependencies ---
+node_modules/
+.pnp
+.pnp.js
+
+# --- Environment / secrets ---
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# --- Build outputs ---
+dist/
+build/
+out/
+.next/
+next-env.d.ts
+
+# --- Prisma ---
+apps/api/prisma/*.db
+
+# --- Logs ---
+*.log
+npm-debug.log*
+logs/
+
+# --- Testing / coverage ---
+coverage/
+.nyc_output/
+
+# --- Editor / OS ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# --- Turbo / caches ---
+.turbo/
+*.tsbuildinfo
