@@ -68,4 +68,15 @@ export const productsApi = {
 
   removeImage: (id: string, imageId: string): Promise<ProductDetail> =>
     apiFetch<ProductDetail>(`/admin/products/${id}/images/${imageId}`, { method: 'DELETE', auth: true }),
+
+  bulkImport: (file: File): Promise<BulkImportResult> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiUpload<BulkImportResult>('/admin/products/bulk-import', { formData, auth: true });
+  },
 };
+
+export interface BulkImportResult {
+  created: number;
+  failed: { row: number; error: string }[];
+}

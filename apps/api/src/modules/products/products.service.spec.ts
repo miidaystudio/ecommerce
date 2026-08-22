@@ -28,6 +28,7 @@ describe('ProductsService', () => {
       delete: jest.fn(),
     },
     category: { findUnique: jest.fn() },
+    brand: { findUnique: jest.fn() },
     $transaction: jest.fn(),
   };
 
@@ -144,6 +145,50 @@ describe('ProductsService', () => {
 
       const createArgs = prismaMock.product.create.mock.calls[0][0];
       expect(createArgs.data.inStock).toBe(false);
+    });
+  });
+
+  describe('bulkImport', () => {
+    beforeEach(() => {
+      prismaMock.product.create.mockResolvedValue({
+        id: 'p1',
+        images: [],
+        variants: [],
+        category: { id: 'cat-1', name: 'Cat', slug: 'home-living' },
+        brand: null,
+      });
+    });
+
+    it('creates a product per valid row and reports per-row failures without aborting the batch', async () => {
+      prismaMock.category.findUnique.mockImplementation(({ where }: { where: { slug: string } }) =>
+        where.slug === 'home-living' ? { id: 'cat-1', slug: 'home-living' } : null,
+      );
+      prismaMock.product.findUnique.mockResolvedValue(null); // slug always free
+      prismaMock.productVariant.findMany.mockResolvedValue([]); // sku always free
+
+      const result = await service.bulkImport([
+        { name: 'Oat Runner', categorySlug: 'home-living', sku: 'OAT-1', price: '1490', stock: '5' },
+        { name: 'Missing category', categorySlug: 'does-not-exist', sku: 'X-1', price: '100', stock: '1' },
+        { name: '', categorySlug: 'home-living', sku: 'X-2', price: '100', stock: '1' },
+      ]);
+
+      expect(result.created).toBe(1);
+      expect(result.failed).toHaveLength(2);
+      expect(result.failed[0]).toMatchObject({ row: 3, error: expect.stringContaining('categorySlug') });
+      expect(result.failed[1]).toMatchObject({ row: 4, error: expect.stringContaining('name') });
+    });
+
+    it('rejects a row with a non-numeric price without crashing the batch', async () => {
+      prismaMock.category.findUnique.mockResolvedValue({ id: 'cat-1', slug: 'home-living' });
+      prismaMock.product.findUnique.mockResolvedValue(null);
+      prismaMock.productVariant.findMany.mockResolvedValue([]);
+
+      const result = await service.bulkImport([
+        { name: 'Bad Price', categorySlug: 'home-living', sku: 'BAD-1', price: 'not-a-number', stock: '1' },
+      ]);
+
+      expect(result.created).toBe(0);
+      expect(result.failed[0].error).toContain('price');
     });
   });
 

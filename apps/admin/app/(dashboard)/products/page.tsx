@@ -2,12 +2,12 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import type { ProductStatus, ProductSummary } from '@ecommerce/shared-types';
 import { Badge, type BadgeTone } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { ApiError } from '../../../lib/api/client';
-import { productsApi } from '../../../lib/api/products.api';
+import { productsApi, type BulkImportResult } from '../../../lib/api/products.api';
 import { useDebouncedValue } from '../../../lib/hooks/useDebouncedValue';
 import { resolveImageUrl } from '../../../lib/utils/image-url';
 
@@ -43,6 +43,12 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [reloadTick, setReloadTick] = useState(0);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<BulkImportResult | null>(null);
+  const [importError, setImportError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     setPage(1);
   }, [status, debouncedSearch]);
@@ -76,7 +82,25 @@ export default function ProductsPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, status, debouncedSearch]);
+  }, [page, status, debouncedSearch, reloadTick]);
+
+  async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setImporting(true);
+    setImportError('');
+    setImportResult(null);
+    try {
+      const result = await productsApi.bulkImport(file);
+      setImportResult(result);
+      setReloadTick((t) => t + 1);
+    } catch (err) {
+      setImportError(err instanceof ApiError ? err.message : 'Failed to import CSV');
+    } finally {
+      setImporting(false);
+    }
+  }
 
   return (
     <div>
@@ -85,10 +109,46 @@ export default function ProductsPage() {
           <h1 className="text-2xl font-semibold tracking-tight text-text-primary">Products</h1>
           <p className="mt-1.5 text-xs text-text-secondary">{total} product{total === 1 ? '' : 's'} in your catalog</p>
         </div>
-        <Link href="/products/new">
-          <Button>+ Add product</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={handleImportFile}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={importing}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {importing ? 'Importing…' : 'Import CSV'}
+          </Button>
+          <Link href="/products/new">
+            <Button>+ Add product</Button>
+          </Link>
+        </div>
       </div>
+
+      {importError ? <p className="mb-4 text-sm text-danger">{importError}</p> : null}
+      {importResult ? (
+        <div className="mb-4 rounded-lg border border-border bg-surface p-4 text-sm">
+          <p className="font-medium text-text-primary">
+            Imported {importResult.created} product{importResult.created === 1 ? '' : 's'}
+            {importResult.failed.length > 0 ? `, ${importResult.failed.length} row(s) failed` : ''}.
+          </p>
+          {importResult.failed.length > 0 ? (
+            <ul className="mt-2 flex flex-col gap-1 text-xs text-danger">
+              {importResult.failed.map((f) => (
+                <li key={f.row}>
+                  Row {f.row}: {f.error}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex gap-1 rounded-full bg-surface p-1">

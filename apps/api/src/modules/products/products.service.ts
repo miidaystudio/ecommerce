@@ -68,6 +68,11 @@ export interface PaginatedProducts<T> {
   totalPages: number;
 }
 
+export interface BulkImportResult {
+  created: number;
+  failed: { row: number; error: string }[];
+}
+
 @Injectable()
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -313,6 +318,88 @@ export class ProductsService {
     }
     await this.prisma.product.delete({ where: { id } });
     return { success: true };
+  }
+
+  // Bulk CSV import: one row = one product with a single default variant.
+  // Multi-variant products still go through the regular create/edit form —
+  // CSV is for fast catalog seeding, not full variant modeling.
+  async bulkImport(records: Record<string, string>[]): Promise<BulkImportResult> {
+    const result: BulkImportResult = { created: 0, failed: [] };
+
+    for (let i = 0; i < records.length; i++) {
+      const rowNumber = i + 2; // +1 for header row, +1 for 1-based rows
+      const record = records[i];
+      try {
+        const name = record.name?.trim();
+        if (!name) {
+          throw new BadRequestException('name is required');
+        }
+        const categorySlug = record.categorySlug?.trim();
+        if (!categorySlug) {
+          throw new BadRequestException('categorySlug is required');
+        }
+        const category = await this.prisma.category.findUnique({ where: { slug: categorySlug } });
+        if (!category) {
+          throw new BadRequestException(`Unknown categorySlug "${categorySlug}"`);
+        }
+
+        let brandId: string | undefined;
+        const brandSlug = record.brandSlug?.trim();
+        if (brandSlug) {
+          const brand = await this.prisma.brand.findUnique({ where: { slug: brandSlug } });
+          if (!brand) {
+            throw new BadRequestException(`Unknown brandSlug "${brandSlug}"`);
+          }
+          brandId = brand.id;
+        }
+
+        const sku = record.sku?.trim();
+        if (!sku) {
+          throw new BadRequestException('sku is required');
+        }
+        const price = Number(record.price);
+        if (!Number.isFinite(price) || price < 0) {
+          throw new BadRequestException('price must be a non-negative number');
+        }
+        const stock = Number(record.stock);
+        if (!Number.isInteger(stock) || stock < 0) {
+          throw new BadRequestException('stock must be a non-negative whole number');
+        }
+        const compareAtPrice = record.compareAtPrice ? Number(record.compareAtPrice) : undefined;
+        if (compareAtPrice !== undefined && (!Number.isFinite(compareAtPrice) || compareAtPrice < 0)) {
+          throw new BadRequestException('compareAtPrice must be a non-negative number');
+        }
+        const status = record.status?.trim().toUpperCase();
+        if (status && !Object.values(ProductStatus).includes(status as ProductStatus)) {
+          throw new BadRequestException(`Unknown status "${record.status}"`);
+        }
+
+        await this.create({
+          name,
+          slug: record.slug?.trim() || undefined,
+          description: record.description?.trim() || name,
+          status: (status as ProductStatus) || undefined,
+          categoryId: category.id,
+          brandId,
+          variants: [
+            {
+              sku,
+              name: 'Default',
+              price,
+              compareAtPrice,
+              stock,
+              isDefault: true,
+            },
+          ],
+        });
+        result.created += 1;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        result.failed.push({ row: rowNumber, error: message });
+      }
+    }
+
+    return result;
   }
 
   async addImage(

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -16,13 +17,22 @@ import { Role } from '@prisma/client';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { csvRowsToRecords, parseCsv } from '../../common/utils/csv';
 import { LocalImageStorageService } from '../upload/local-image-storage.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ListAdminProductsQueryDto } from './dto/list-admin-products-query.dto';
 import { ListProductsQueryDto } from './dto/list-products-query.dto';
 import { SearchProductsQueryDto } from './dto/search-products-query.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { PaginatedProducts, ProductDetail, ProductSummary, ProductsService } from './products.service';
+import {
+  BulkImportResult,
+  PaginatedProducts,
+  ProductDetail,
+  ProductSummary,
+  ProductsService,
+} from './products.service';
+
+const MAX_CSV_SIZE_BYTES = 2 * 1024 * 1024;
 
 @Controller()
 export class ProductsController {
@@ -65,6 +75,22 @@ export class ProductsController {
   @Roles(Role.STAFF, Role.SUPER_ADMIN)
   create(@Body() dto: CreateProductDto): Promise<ProductDetail> {
     return this.productsService.create(dto);
+  }
+
+  @Post('admin/products/bulk-import')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.STAFF, Role.SUPER_ADMIN)
+  @UseInterceptors(FileInterceptor('file'))
+  bulkImport(@UploadedFile() file: Express.Multer.File): Promise<BulkImportResult> {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    if (file.size > MAX_CSV_SIZE_BYTES) {
+      throw new BadRequestException('CSV must be 2MB or smaller');
+    }
+    const text = file.buffer.toString('utf-8');
+    const records = csvRowsToRecords(parseCsv(text));
+    return this.productsService.bulkImport(records);
   }
 
   @Patch('admin/products/:id')

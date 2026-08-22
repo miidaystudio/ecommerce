@@ -177,6 +177,39 @@ describe('Product Catalog (e2e)', () => {
     await prisma.product.delete({ where: { id: draft.body.id } });
   });
 
+  it('bulk-imports products from CSV, reporting per-row failures without aborting the batch', async () => {
+    const csv = [
+      'name,categorySlug,sku,price,stock,status',
+      `E2E CSV A ${stamp},${await getCategorySlug()},E2E-CSV-A-${stamp},750,3,ACTIVE`,
+      `E2E CSV Bad ${stamp},no-such-category,E2E-CSV-B-${stamp},750,3,ACTIVE`,
+    ].join('\n');
+
+    const res = await request(app.getHttpServer())
+      .post('/api/admin/products/bulk-import')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .attach('file', Buffer.from(csv), { filename: 'products.csv', contentType: 'text/csv' })
+      .expect(201);
+
+    expect(res.body.created).toBe(1);
+    expect(res.body.failed).toHaveLength(1);
+    expect(res.body.failed[0].error).toContain('no-such-category');
+
+    const created = await prisma.product.findFirst({ where: { name: `E2E CSV A ${stamp}` } });
+    expect(created).not.toBeNull();
+    if (created) {
+      await prisma.product.delete({ where: { id: created.id } });
+    }
+  });
+
+  it('blocks a customer from using bulk-import', async () => {
+    const csv = 'name,categorySlug,sku,price,stock\nX,y,Z,1,1';
+    await request(app.getHttpServer())
+      .post('/api/admin/products/bulk-import')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .attach('file', Buffer.from(csv), { filename: 'products.csv', contentType: 'text/csv' })
+      .expect(403);
+  });
+
   it('lets staff read the draft-inclusive admin product view by id', async () => {
     await request(app.getHttpServer())
       .get(`/api/admin/products/${productId}`)
