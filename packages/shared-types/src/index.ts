@@ -195,6 +195,107 @@ export interface CreateOrderResponse {
   razorpay: { keyId: string; razorpayOrderId: string; amount: number; currency: string } | null;
 }
 
+// --- Admin (Phase 5) ---
+
+export interface AdminOrderSummary extends OrderSummary {
+  customerEmail: string;
+  customerName: string | null;
+}
+
+export interface AdminOrderDetail extends OrderDetail {
+  customerEmail: string;
+  customerName: string | null;
+}
+
+export interface PaginatedAdminOrders {
+  items: AdminOrderSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface InventoryLineView {
+  variantId: string;
+  sku: string;
+  variantName: string;
+  productId: string;
+  productName: string;
+  stock: number;
+  lowStock: boolean;
+}
+
+export interface PaginatedInventory {
+  items: InventoryLineView[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  lowStockCount: number;
+}
+
+export const InventoryAdjustmentReason = {
+  ORDER_PLACED: 'ORDER_PLACED',
+  ORDER_CANCELLED: 'ORDER_CANCELLED',
+  MANUAL: 'MANUAL',
+  RESTOCK: 'RESTOCK',
+} as const;
+
+export type InventoryAdjustmentReason = (typeof InventoryAdjustmentReason)[keyof typeof InventoryAdjustmentReason];
+
+export interface AdjustmentView {
+  id: string;
+  variantId: string;
+  change: number;
+  reason: InventoryAdjustmentReason;
+  orderId: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface CustomerSummary {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+  isBlocked: boolean;
+  orderCount: number;
+  createdAt: string;
+}
+
+export interface CustomerDetail extends CustomerSummary {
+  orders: { id: string; orderNumber: string; status: string; total: number; createdAt: string }[];
+}
+
+export interface PaginatedCustomers {
+  items: CustomerSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface DashboardSummary {
+  rangeDays: number;
+  revenue: number;
+  previousRevenue: number;
+  orderCount: number;
+  newCustomerCount: number;
+  avgOrderValue: number;
+  lowStockCount: number;
+  revenueByDay: { date: string; revenue: number }[];
+  recentOrders: {
+    id: string;
+    orderNumber: string;
+    customerEmail: string;
+    status: OrderStatus;
+    total: number;
+    createdAt: string;
+  }[];
+  topProducts: { productName: string; quantitySold: number; revenue: number }[];
+}
+
 export interface CartItemView {
   id: string;
   variantId: string;

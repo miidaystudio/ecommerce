@@ -59,6 +59,10 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   FLAT_SHIPPING_FEE?: string;
+
+  @IsOptional()
+  @IsString()
+  LOW_STOCK_THRESHOLD?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

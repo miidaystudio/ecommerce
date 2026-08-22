@@ -78,6 +78,44 @@ export interface PaginatedOrders {
   totalPages: number;
 }
 
+export interface AdminOrderSummary extends OrderSummary {
+  customerEmail: string;
+  customerName: string | null;
+}
+
+export interface AdminOrderDetail extends OrderDetail {
+  customerEmail: string;
+  customerName: string | null;
+}
+
+export interface PaginatedAdminOrders {
+  items: AdminOrderSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+const ADMIN_ORDER_INCLUDE = {
+  items: true,
+  payment: true,
+  user: { select: { email: true, firstName: true, lastName: true } },
+} satisfies Prisma.OrderInclude;
+
+type AdminOrderWithRelations = Prisma.OrderGetPayload<{ include: typeof ADMIN_ORDER_INCLUDE }>;
+
+// Admin-settable transitions. PENDING is system-only (payment confirmation);
+// CANCELLED/RETURNED are terminal. Both release any deducted stock.
+const ADMIN_ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  PENDING: [],
+  CONFIRMED: [OrderStatus.PACKED, OrderStatus.CANCELLED],
+  PACKED: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
+  SHIPPED: [OrderStatus.DELIVERED, OrderStatus.RETURNED],
+  DELIVERED: [OrderStatus.RETURNED],
+  CANCELLED: [],
+  RETURNED: [],
+};
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -330,6 +368,93 @@ export class OrdersService {
     return this.toDetail(order);
   }
 
+  async adminList(query: {
+    page?: number;
+    pageSize?: number;
+    status?: OrderStatus;
+    q?: string;
+  }): Promise<PaginatedAdminOrders> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+
+    const where: Prisma.OrderWhereInput = {
+      status: query.status,
+      ...(query.q
+        ? {
+            OR: [
+              { orderNumber: { contains: query.q, mode: 'insensitive' } },
+              { user: { email: { contains: query.q, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
+
+    const [orders, total] = await this.prisma.$transaction([
+      this.prisma.order.findMany({
+        where,
+        include: ADMIN_ORDER_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+
+    return {
+      items: orders.map((order) => this.toAdminSummary(order)),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  }
+
+  async adminGetById(orderId: string): Promise<AdminOrderDetail> {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId }, include: ADMIN_ORDER_INCLUDE });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+    return this.toAdminDetail(order);
+  }
+
+  async adminUpdateStatus(orderId: string, nextStatus: OrderStatus): Promise<AdminOrderDetail> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true, payment: true },
+    });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    const allowed = ADMIN_ALLOWED_TRANSITIONS[order.status] ?? [];
+    if (!allowed.includes(nextStatus)) {
+      throw new BadRequestException(`Cannot move an order from ${order.status} to ${nextStatus}`);
+    }
+
+    const releasesStock = nextStatus === OrderStatus.CANCELLED || nextStatus === OrderStatus.RETURNED;
+
+    await this.prisma.$transaction(async (tx) => {
+      if (releasesStock) {
+        const restock = order.items
+          .filter((item) => item.variantId)
+          .map((item) => ({ variantId: item.variantId as string, quantity: -item.quantity }));
+        await this.inventory.adjustStock(
+          tx,
+          restock,
+          order.id,
+          nextStatus === OrderStatus.CANCELLED
+            ? InventoryAdjustmentReason.ORDER_CANCELLED
+            : InventoryAdjustmentReason.RESTOCK,
+        );
+      }
+      await tx.order.update({ where: { id: order.id }, data: { status: nextStatus } });
+    });
+
+    const fresh = await this.prisma.order.findUniqueOrThrow({ where: { id: orderId }, include: ADMIN_ORDER_INCLUDE });
+    await this.sendStatusChangeEmail(order.userId, fresh, nextStatus);
+    return this.toAdminDetail(fresh);
+  }
+
   private async createRazorpayOrderFor(orderId: string, total: number, receipt: string) {
     const razorpayOrder = await this.razorpay.createOrder(Math.round(total * 100), receipt);
     await this.prisma.payment.update({ where: { orderId }, data: { razorpayOrderId: razorpayOrder.id } });
@@ -420,6 +545,58 @@ export class OrdersService {
         lineTotal: Number(item.lineTotal),
       })),
       createdAt: order.createdAt.toISOString(),
+    };
+  }
+
+  private async sendStatusChangeEmail(
+    userId: string,
+    order: OrderWithRelations,
+    status: OrderStatus,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return;
+
+    const copy: Partial<Record<OrderStatus, { subject: string; body: string }>> = {
+      PACKED: {
+        subject: `Order packed — ${order.orderNumber}`,
+        body: `Hi ${user.firstName ?? 'there'},\n\nYour order ${order.orderNumber} has been packed and will ship soon.`,
+      },
+      SHIPPED: {
+        subject: `Order shipped — ${order.orderNumber}`,
+        body: `Hi ${user.firstName ?? 'there'},\n\nYour order ${order.orderNumber} is on its way.`,
+      },
+      DELIVERED: {
+        subject: `Order delivered — ${order.orderNumber}`,
+        body: `Hi ${user.firstName ?? 'there'},\n\nYour order ${order.orderNumber} has been delivered. We hope you love it.`,
+      },
+      CANCELLED: {
+        subject: `Order cancelled — ${order.orderNumber}`,
+        body: `Hi ${user.firstName ?? 'there'},\n\nYour order ${order.orderNumber} has been cancelled.`,
+      },
+      RETURNED: {
+        subject: `Order returned — ${order.orderNumber}`,
+        body: `Hi ${user.firstName ?? 'there'},\n\nYour return for order ${order.orderNumber} has been processed.`,
+      },
+    };
+
+    const message = copy[status];
+    if (!message) return;
+    await this.email.send({ to: user.email, ...message });
+  }
+
+  private toAdminSummary(order: AdminOrderWithRelations): AdminOrderSummary {
+    return {
+      ...this.toSummary(order),
+      customerEmail: order.user.email,
+      customerName: [order.user.firstName, order.user.lastName].filter(Boolean).join(' ') || null,
+    };
+  }
+
+  private toAdminDetail(order: AdminOrderWithRelations): AdminOrderDetail {
+    return {
+      ...this.toDetail(order),
+      customerEmail: order.user.email,
+      customerName: [order.user.firstName, order.user.lastName].filter(Boolean).join(' ') || null,
     };
   }
 }

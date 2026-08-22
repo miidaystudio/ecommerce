@@ -270,4 +270,87 @@ describe('OrdersService', () => {
       expect(paymentsServiceMock.confirmPayment).toHaveBeenCalledWith('order_real', 'pay_1', 'good_sig');
     });
   });
+
+  describe('adminUpdateStatus', () => {
+    function orderWith(status: OrderStatus) {
+      return {
+        id: 'order-1',
+        userId: 'user-1',
+        status,
+        orderNumber: 'ORD-1',
+        items: [{ variantId: 'variant-1', quantity: 2 }],
+        payment: {},
+      };
+    }
+
+    it('throws NotFoundException for a missing order', async () => {
+      prismaMock.order.findUnique.mockResolvedValue(null);
+      await expect(service.adminUpdateStatus('missing', OrderStatus.PACKED)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it.each([
+      [OrderStatus.PENDING, OrderStatus.PACKED],
+      [OrderStatus.CONFIRMED, OrderStatus.SHIPPED], // skipping PACKED
+      [OrderStatus.CANCELLED, OrderStatus.PACKED], // terminal state
+      [OrderStatus.DELIVERED, OrderStatus.PACKED], // backwards
+    ])('rejects an illegal transition from %s to %s', async (from, to) => {
+      prismaMock.order.findUnique.mockResolvedValue(orderWith(from));
+      await expect(service.adminUpdateStatus('order-1', to)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('allows CONFIRMED -> PACKED -> SHIPPED -> DELIVERED without restocking', async () => {
+      prismaMock.order.findUnique.mockResolvedValue(orderWith(OrderStatus.CONFIRMED));
+      prismaMock.order.findUniqueOrThrow.mockResolvedValue({
+        ...orderWith(OrderStatus.PACKED),
+        createdAt: new Date(),
+        user: { email: 'c@test.local', firstName: 'C', lastName: null },
+      });
+
+      await service.adminUpdateStatus('order-1', OrderStatus.PACKED);
+
+      expect(inventoryMock.adjustStock).not.toHaveBeenCalled();
+      expect(prismaMock.order.update).toHaveBeenCalledWith({
+        where: { id: 'order-1' },
+        data: { status: OrderStatus.PACKED },
+      });
+    });
+
+    it('restocks inventory when an admin cancels a CONFIRMED order', async () => {
+      prismaMock.order.findUnique.mockResolvedValue(orderWith(OrderStatus.CONFIRMED));
+      prismaMock.order.findUniqueOrThrow.mockResolvedValue({
+        ...orderWith(OrderStatus.CANCELLED),
+        createdAt: new Date(),
+        user: { email: 'c@test.local', firstName: 'C', lastName: null },
+      });
+
+      await service.adminUpdateStatus('order-1', OrderStatus.CANCELLED);
+
+      expect(inventoryMock.adjustStock).toHaveBeenCalledWith(
+        prismaMock,
+        [{ variantId: 'variant-1', quantity: -2 }],
+        'order-1',
+        'ORDER_CANCELLED',
+      );
+    });
+
+    it('restocks inventory when a DELIVERED order is marked RETURNED', async () => {
+      prismaMock.order.findUnique.mockResolvedValue(orderWith(OrderStatus.DELIVERED));
+      prismaMock.order.findUniqueOrThrow.mockResolvedValue({
+        ...orderWith(OrderStatus.RETURNED),
+        createdAt: new Date(),
+        user: { email: 'c@test.local', firstName: 'C', lastName: null },
+      });
+
+      await service.adminUpdateStatus('order-1', OrderStatus.RETURNED);
+
+      expect(inventoryMock.adjustStock).toHaveBeenCalledWith(
+        prismaMock,
+        [{ variantId: 'variant-1', quantity: -2 }],
+        'order-1',
+        'RESTOCK',
+      );
+    });
+  });
 });
