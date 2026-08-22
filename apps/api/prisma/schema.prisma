@@ -30,6 +30,8 @@ model User {
   cartItems     CartItem[]
   wishlistItems WishlistItem[]
   orders        Order[]
+  reviews       Review[]
+  couponRedemptions CouponRedemption[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -121,6 +123,12 @@ model Product {
   images          ProductImage[]
   variants        ProductVariant[]
   wishlistedBy    WishlistItem[]
+  reviews         Review[]
+  // Denormalized from APPROVED reviews (recomputed on every moderation change)
+  // so listing/sorting by rating stays a single indexed query — same rationale
+  // as the displayPrice/inStock fields below.
+  ratingAverage   Decimal  @db.Decimal(3, 2) @default(0)
+  ratingCount     Int      @default(0)
   // Denormalized from variants (recomputed server-side on every variant write) so
   // listing/filtering/sorting stays a single indexed query instead of an aggregate join.
   displayPrice           Decimal  @db.Decimal(10, 2) @default(0)
@@ -251,11 +259,19 @@ model Order {
 
   subtotal    Decimal       @db.Decimal(10, 2)
   shippingFee Decimal       @db.Decimal(10, 2) @default(0)
+  // Discount is recomputed server-side from the coupon at order time and the
+  // code snapshotted here — an order's discount never changes if the coupon is
+  // later edited or deleted.
+  discount       Decimal  @db.Decimal(10, 2) @default(0)
+  couponCode     String?
+  couponId       String?
+  coupon         Coupon?  @relation(fields: [couponId], references: [id], onDelete: SetNull)
   total       Decimal       @db.Decimal(10, 2)
   paymentMethod PaymentMethod
 
   items   OrderItem[]
   payment Payment?
+  couponRedemption CouponRedemption?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -321,4 +337,100 @@ model InventoryAdjustment {
 
   @@index([variantId])
   @@map("inventory_adjustments")
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+model Coupon {
+  id           String       @id @default(uuid())
+  code         String       @unique
+  description  String?
+  discountType DiscountType
+  // For PERCENTAGE this is 1-100; for FIXED it's a currency amount. Both are
+  // validated > 0 at write time; the resulting discount is always clamped to
+  // never exceed the cart subtotal (no negative-total orders).
+  discountValue Decimal     @db.Decimal(10, 2)
+  // Optional cap on a percentage discount, e.g. "20% off, up to ₹500".
+  maxDiscount   Decimal?    @db.Decimal(10, 2)
+  minOrderValue Decimal?    @db.Decimal(10, 2)
+  // Null = unlimited. usedCount is incremented inside the order transaction.
+  usageLimit      Int?
+  perUserLimit    Int?
+  usedCount       Int       @default(0)
+  isActive        Boolean   @default(true)
+  startsAt        DateTime?
+  expiresAt       DateTime?
+
+  orders      Order[]
+  redemptions CouponRedemption[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@map("coupons")
+}
+
+// One row per successful redemption. Enforces per-user limits and gives the
+// usedCount an auditable backing record rather than a bare counter.
+model CouponRedemption {
+  id       String @id @default(uuid())
+  couponId String
+  coupon   Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId  String @unique
+  order    Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  discountAmount Decimal  @db.Decimal(10, 2)
+  createdAt      DateTime @default(now())
+
+  @@index([couponId, userId])
+  @@map("coupon_redemptions")
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Review {
+  id        String       @id @default(uuid())
+  productId String
+  product   Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int
+  title     String?
+  body      String
+  status    ReviewStatus @default(PENDING)
+  // Set when the reviewer has a delivered order containing this product.
+  isVerifiedPurchase Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One review per customer per product; editing replaces rather than stacks.
+  @@unique([productId, userId])
+  @@index([productId, status])
+  @@map("reviews")
+}
+
+model Banner {
+  id        String   @id @default(uuid())
+  title     String
+  subtitle  String?
+  imageUrl  String?
+  linkUrl   String?
+  position  Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, position])
+  @@map("banners")
 }

@@ -88,6 +88,8 @@ export interface ProductSummary {
   price: number;
   compareAtPrice: number | null;
   inStock: boolean;
+  ratingAverage: number;
+  ratingCount: number;
 }
 
 export interface ProductDetail {
@@ -183,6 +185,8 @@ export interface OrderDetail {
   shippingAddress: OrderShippingAddress;
   subtotal: number;
   shippingFee: number;
+  discount: number;
+  couponCode: string | null;
   total: number;
   items: OrderItemView[];
   createdAt: string;
@@ -274,6 +278,95 @@ export interface PaginatedCustomers {
   page: number;
   pageSize: number;
   totalPages: number;
+}
+
+// --- Marketing & engagement (Phase 6) ---
+
+export const DiscountType = {
+  PERCENTAGE: 'PERCENTAGE',
+  FIXED: 'FIXED',
+} as const;
+
+export type DiscountType = (typeof DiscountType)[keyof typeof DiscountType];
+
+export interface CouponView {
+  id: string;
+  code: string;
+  description: string | null;
+  discountType: DiscountType;
+  discountValue: number;
+  maxDiscount: number | null;
+  minOrderValue: number | null;
+  usageLimit: number | null;
+  perUserLimit: number | null;
+  usedCount: number;
+  isActive: boolean;
+  startsAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface PaginatedCoupons {
+  items: CouponView[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface AppliedCoupon {
+  couponId: string;
+  code: string;
+  discount: number;
+}
+
+export const ReviewStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+} as const;
+
+export type ReviewStatus = (typeof ReviewStatus)[keyof typeof ReviewStatus];
+
+export interface ReviewView {
+  id: string;
+  productId: string;
+  rating: number;
+  title: string | null;
+  body: string;
+  status: ReviewStatus;
+  isVerifiedPurchase: boolean;
+  authorName: string;
+  createdAt: string;
+}
+
+export interface AdminReviewView extends ReviewView {
+  productName: string;
+  authorEmail: string;
+}
+
+export interface PaginatedReviews<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface ProductReviewSummary {
+  ratingAverage: number;
+  ratingCount: number;
+  breakdown: Record<1 | 2 | 3 | 4 | 5, number>;
+}
+
+export interface BannerView {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  imageUrl: string | null;
+  linkUrl: string | null;
+  position: number;
+  isActive: boolean;
 }
 
 export interface DashboardSummary {

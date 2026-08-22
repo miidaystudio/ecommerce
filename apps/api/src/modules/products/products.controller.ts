@@ -22,6 +22,7 @@ import { LocalImageStorageService } from '../upload/local-image-storage.service'
 import { CreateProductDto } from './dto/create-product.dto';
 import { ListAdminProductsQueryDto } from './dto/list-admin-products-query.dto';
 import { ListProductsQueryDto } from './dto/list-products-query.dto';
+import { RecentlyViewedQueryDto } from './dto/recently-viewed-query.dto';
 import { SearchProductsQueryDto } from './dto/search-products-query.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import {
@@ -51,9 +52,22 @@ export class ProductsController {
     return this.productsService.search(query.q);
   }
 
+  // Registered before the ':slug' route so "recently-viewed" isn't swallowed
+  // by it as a slug value.
+  @Get('products/recently-viewed')
+  recentlyViewed(@Query() query: RecentlyViewedQueryDto): Promise<ProductSummary[]> {
+    const ids = query.ids ? query.ids.split(',').map((id) => id.trim()).filter(Boolean) : [];
+    return this.productsService.listByIds(ids);
+  }
+
   @Get('products/:slug')
   getBySlug(@Param('slug') slug: string): Promise<ProductDetail> {
     return this.productsService.getPublicBySlug(slug);
+  }
+
+  @Get('products/:slug/related')
+  related(@Param('slug') slug: string): Promise<ProductSummary[]> {
+    return this.productsService.listRelated(slug);
   }
 
   @Get('admin/products')

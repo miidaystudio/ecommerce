@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InventoryAdjustmentReason, OrderStatus, PaymentStatus } from '@prisma/client';
 import { EmailService } from '../../common/email/email.service';
 import { PrismaService } from '../../database/prisma.service';
+import { CouponsService } from '../coupons/coupons.service';
 import { InventoryService } from '../inventory/inventory.service';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly inventory: InventoryService,
     private readonly email: EmailService,
+    private readonly coupons: CouponsService,
   ) {}
 
   /** The single place a Razorpay payment gets marked PAID and its order CONFIRMED
@@ -47,6 +49,12 @@ export class PaymentsService {
         .filter((item) => item.variantId)
         .map((item) => ({ variantId: item.variantId as string, quantity: item.quantity }));
       await this.inventory.adjustStock(tx, lines, order.id, InventoryAdjustmentReason.ORDER_PLACED);
+
+      // Consume the coupon use only now that payment is real — an abandoned
+      // Razorpay checkout must never burn a limited-use coupon.
+      if (order.couponId) {
+        await this.coupons.redeem(tx, order.couponId, order.userId, order.id, Number(order.discount));
+      }
 
       await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.CONFIRMED } });
       await tx.cartItem.deleteMany({ where: { userId: order.userId } });

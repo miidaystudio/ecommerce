@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { InventoryAdjustmentReason, OrderStatus, PaymentMethod, PaymentStatus, Prisma, ProductStatus } from '@prisma/client';
 import { EmailService } from '../../common/email/email.service';
 import { PrismaService } from '../../database/prisma.service';
+import { CouponsService } from '../coupons/coupons.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { PaymentsService } from '../payments/payments.service';
 import { RazorpayService } from '../payments/razorpay.service';
@@ -60,6 +61,8 @@ export interface OrderDetail {
   shippingAddress: OrderShippingAddress;
   subtotal: number;
   shippingFee: number;
+  discount: number;
+  couponCode: string | null;
   total: number;
   items: OrderItemView[];
   createdAt: string;
@@ -125,6 +128,7 @@ export class OrdersService {
     private readonly inventory: InventoryService,
     private readonly email: EmailService,
     private readonly config: ConfigService,
+    private readonly coupons: CouponsService,
   ) {}
 
   async create(userId: string, dto: CreateOrderDto): Promise<CreateOrderResponse> {
@@ -160,8 +164,23 @@ export class OrdersService {
 
     const subtotal = cartItems.reduce((sum, item) => sum + Number(item.variant.price) * item.quantity, 0);
     const shippingFee = this.computeShippingFee(subtotal);
-    const total = subtotal + shippingFee;
+
+    // Re-validated from scratch here even if the client already previewed it —
+    // the preview grants nothing, and the discount is computed from the live
+    // cart subtotal, never from any amount the client sent.
+    const appliedCoupon = dto.couponCode
+      ? await this.coupons.validateForUser(dto.couponCode, userId, subtotal)
+      : null;
+    const discount = appliedCoupon?.discount ?? 0;
+
+    const total = Math.max(0, subtotal - discount) + shippingFee;
     const orderNumber = await this.generateOrderNumber();
+
+    const couponFields = {
+      discount,
+      couponCode: appliedCoupon?.code ?? null,
+      couponId: appliedCoupon?.couponId ?? null,
+    };
 
     const itemsData = cartItems.map((item) => ({
       variantId: item.variantId,
@@ -195,6 +214,7 @@ export class OrdersService {
             ...shippingFields,
             subtotal,
             shippingFee,
+            ...couponFields,
             total,
             paymentMethod: PaymentMethod.COD,
             items: { create: itemsData },
@@ -205,6 +225,9 @@ export class OrdersService {
 
         const lines = cartItems.map((item) => ({ variantId: item.variantId, quantity: item.quantity }));
         await this.inventory.adjustStock(tx, lines, created.id, InventoryAdjustmentReason.ORDER_PLACED);
+        if (appliedCoupon) {
+          await this.coupons.redeem(tx, appliedCoupon.couponId, userId, created.id, appliedCoupon.discount);
+        }
         await tx.cartItem.deleteMany({ where: { userId } });
 
         return created;
@@ -215,9 +238,9 @@ export class OrdersService {
     }
 
     // RAZORPAY: create the order PENDING with no stock deducted yet — arc.md:
-    // "never deduct stock before payment is confirmed." Confirmation happens in
-    // PaymentsService.confirmPayment(), triggered by the webhook and/or the
-    // signature-verified return-from-checkout call (verifyPaymentSignature below).
+    // "never deduct stock before payment is confirmed." The coupon is likewise
+    // recorded on the order but NOT redeemed here; PaymentsService.confirmPayment()
+    // consumes the use, so an abandoned payment never burns a coupon.
     const order = await this.prisma.order.create({
       data: {
         orderNumber,
@@ -226,6 +249,7 @@ export class OrdersService {
         ...shippingFields,
         subtotal,
         shippingFee,
+        ...couponFields,
         total,
         paymentMethod: PaymentMethod.RAZORPAY,
         items: { create: itemsData },
@@ -532,6 +556,8 @@ export class OrdersService {
       },
       subtotal: Number(order.subtotal),
       shippingFee: Number(order.shippingFee),
+      discount: Number(order.discount),
+      couponCode: order.couponCode,
       total: Number(order.total),
       items: order.items.map((item) => ({
         id: item.id,

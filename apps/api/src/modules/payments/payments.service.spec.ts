@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { OrderStatus, PaymentStatus } from '@prisma/client';
 import { EmailService } from '../../common/email/email.service';
 import { PrismaService } from '../../database/prisma.service';
+import { CouponsService } from '../coupons/coupons.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { PaymentsService } from './payments.service';
 
@@ -18,6 +19,7 @@ describe('PaymentsService.confirmPayment — idempotency (security/correctness c
 
   const inventoryMock = { adjustStock: jest.fn() };
   const emailMock = { send: jest.fn() };
+  const couponsMock = { redeem: jest.fn() };
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -26,6 +28,7 @@ describe('PaymentsService.confirmPayment — idempotency (security/correctness c
         { provide: PrismaService, useValue: prismaMock },
         { provide: InventoryService, useValue: inventoryMock },
         { provide: EmailService, useValue: emailMock },
+        { provide: CouponsService, useValue: couponsMock },
       ],
     }).compile();
 

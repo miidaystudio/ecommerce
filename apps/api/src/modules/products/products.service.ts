@@ -35,6 +35,8 @@ export interface ProductSummary {
   price: number;
   compareAtPrice: number | null;
   inStock: boolean;
+  ratingAverage: number;
+  ratingCount: number;
 }
 
 export interface ProductDetail {
@@ -142,6 +144,39 @@ export class ProductsService {
       throw new NotFoundException('Product not found');
     }
     return this.toDetail(product);
+  }
+
+  /** Same-category products, excluding the one being viewed. Deliberately simple —
+   * a real recommendation engine is out of scope for this build. */
+  async listRelated(slug: string, limit = 4): Promise<ProductSummary[]> {
+    const product = await this.prisma.product.findUnique({ where: { slug } });
+    if (!product || product.status !== ProductStatus.ACTIVE) {
+      throw new NotFoundException('Product not found');
+    }
+
+    const related = await this.prisma.product.findMany({
+      where: { status: ProductStatus.ACTIVE, categoryId: product.categoryId, id: { not: product.id } },
+      include: PRODUCT_SUMMARY_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+    return related.map((p) => this.toSummary(p));
+  }
+
+  /** Resolves a caller-supplied list of product ids to summaries — backs the
+   * storefront's "recently viewed" strip, whose id list lives in the browser. */
+  async listByIds(ids: string[]): Promise<ProductSummary[]> {
+    if (ids.length === 0) return [];
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: ids.slice(0, 12) }, status: ProductStatus.ACTIVE },
+      include: PRODUCT_SUMMARY_INCLUDE,
+    });
+    // Preserve the caller's ordering (most-recent first) rather than the DB's.
+    const byId = new Map(products.map((p) => [p.id, p]));
+    return ids
+      .map((id) => byId.get(id))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+      .map((p) => this.toSummary(p));
   }
 
   async listAdmin(query: ListAdminProductsQueryDto): Promise<PaginatedProducts<ProductSummary>> {
@@ -489,6 +524,8 @@ export class ProductsService {
       price: Number(product.displayPrice),
       compareAtPrice: product.displayCompareAtPrice ? Number(product.displayCompareAtPrice) : null,
       inStock: product.inStock,
+      ratingAverage: Number(product.ratingAverage),
+      ratingCount: product.ratingCount,
     };
   }
 

@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import { OrderStatus, PaymentMethod, PaymentStatus, ProductStatus } from '@prisma/client';
 import { EmailService } from '../../common/email/email.service';
 import { PrismaService } from '../../database/prisma.service';
+import { CouponsService } from '../coupons/coupons.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { PaymentsService } from '../payments/payments.service';
 import { RazorpayService } from '../payments/razorpay.service';
@@ -25,6 +26,7 @@ describe('OrdersService', () => {
   const paymentsServiceMock = { confirmPayment: jest.fn() };
   const inventoryMock = { adjustStock: jest.fn() };
   const emailMock = { send: jest.fn() };
+  const couponsMock = { validateForUser: jest.fn(), redeem: jest.fn() };
   const configMock = {
     get: jest.fn((key: string) => (key === 'payments.freeShippingThreshold' ? 999 : key === 'payments.flatShippingFee' ? 79 : undefined)),
   };
@@ -39,6 +41,7 @@ describe('OrdersService', () => {
         { provide: InventoryService, useValue: inventoryMock },
         { provide: EmailService, useValue: emailMock },
         { provide: ConfigService, useValue: configMock },
+        { provide: CouponsService, useValue: couponsMock },
       ],
     }).compile();
 
