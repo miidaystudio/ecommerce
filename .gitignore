@@ -30,6 +30,9 @@ next-env.d.ts
 # --- Prisma ---
 apps/api/prisma/*.db
 
+# --- Local file storage (Phase 2 stand-in for Cloudinary/S3) ---
+apps/api/uploads/
+
 # --- Logs ---
 *.log
 npm-debug.log*

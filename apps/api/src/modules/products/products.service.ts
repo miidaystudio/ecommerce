@@ -1,0 +1,432 @@
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, ProductStatus } from '@prisma/client';
+import { slugify } from '../../common/utils/slugify';
+import { PrismaService } from '../../database/prisma.service';
+import { CreateProductDto } from './dto/create-product.dto';
+import { ListAdminProductsQueryDto } from './dto/list-admin-products-query.dto';
+import { ListProductsQueryDto } from './dto/list-products-query.dto';
+import { ProductVariantDto } from './dto/product-variant.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
+
+const PRODUCT_SUMMARY_INCLUDE = {
+  category: { select: { id: true, name: true, slug: true } },
+  brand: { select: { id: true, name: true, slug: true } },
+  images: { orderBy: { position: 'asc' as const }, take: 1 },
+} satisfies Prisma.ProductInclude;
+
+const PRODUCT_DETAIL_INCLUDE = {
+  category: { select: { id: true, name: true, slug: true } },
+  brand: { select: { id: true, name: true, slug: true } },
+  images: { orderBy: { position: 'asc' as const } },
+  variants: { orderBy: { createdAt: 'asc' as const } },
+} satisfies Prisma.ProductInclude;
+
+type ProductWithSummaryRelations = Prisma.ProductGetPayload<{ include: typeof PRODUCT_SUMMARY_INCLUDE }>;
+type ProductWithDetailRelations = Prisma.ProductGetPayload<{ include: typeof PRODUCT_DETAIL_INCLUDE }>;
+
+export interface ProductSummary {
+  id: string;
+  name: string;
+  slug: string;
+  status: ProductStatus;
+  category: { id: string; name: string; slug: string };
+  brand: { id: string; name: string; slug: string } | null;
+  image: { id: string; url: string; altText: string | null; position: number } | null;
+  price: number;
+  compareAtPrice: number | null;
+  inStock: boolean;
+}
+
+export interface ProductDetail {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  status: ProductStatus;
+  category: { id: string; name: string; slug: string };
+  brand: { id: string; name: string; slug: string } | null;
+  images: { id: string; url: string; altText: string | null; position: number }[];
+  variants: {
+    id: string;
+    sku: string;
+    name: string;
+    attributes: Record<string, string> | null;
+    price: number;
+    compareAtPrice: number | null;
+    stock: number;
+    isDefault: boolean;
+  }[];
+  seoTitle: string | null;
+  seoDescription: string | null;
+}
+
+export interface PaginatedProducts<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+@Injectable()
+export class ProductsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async listPublic(query: ListProductsQueryDto): Promise<PaginatedProducts<ProductSummary>> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+
+    const where: Prisma.ProductWhereInput = {
+      status: ProductStatus.ACTIVE,
+      category: query.category ? { slug: query.category } : undefined,
+      brand: query.brand ? { slug: query.brand } : undefined,
+      inStock: query.inStock === true ? true : undefined,
+      name: query.q ? { contains: query.q, mode: 'insensitive' } : undefined,
+      displayPrice:
+        query.minPrice !== undefined || query.maxPrice !== undefined
+          ? { gte: query.minPrice, lte: query.maxPrice }
+          : undefined,
+    };
+
+    const orderBy: Prisma.ProductOrderByWithRelationInput =
+      query.sort === 'price_asc'
+        ? { displayPrice: 'asc' }
+        : query.sort === 'price_desc'
+          ? { displayPrice: 'desc' }
+          : { createdAt: 'desc' };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.product.findMany({
+        where,
+        include: PRODUCT_SUMMARY_INCLUDE,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    return {
+      items: items.map((product) => this.toSummary(product)),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  }
+
+  async search(q: string): Promise<ProductSummary[]> {
+    const items = await this.prisma.product.findMany({
+      where: {
+        status: ProductStatus.ACTIVE,
+        name: { contains: q, mode: 'insensitive' },
+      },
+      include: PRODUCT_SUMMARY_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
+    return items.map((product) => this.toSummary(product));
+  }
+
+  async getPublicBySlug(slug: string): Promise<ProductDetail> {
+    const product = await this.prisma.product.findUnique({
+      where: { slug },
+      include: PRODUCT_DETAIL_INCLUDE,
+    });
+    if (!product || product.status !== ProductStatus.ACTIVE) {
+      throw new NotFoundException('Product not found');
+    }
+    return this.toDetail(product);
+  }
+
+  async listAdmin(query: ListAdminProductsQueryDto): Promise<PaginatedProducts<ProductSummary>> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+
+    const where: Prisma.ProductWhereInput = {
+      status: query.status,
+      name: query.q ? { contains: query.q, mode: 'insensitive' } : undefined,
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.product.findMany({
+        where,
+        include: PRODUCT_SUMMARY_INCLUDE,
+        orderBy: { updatedAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    return {
+      items: items.map((product) => this.toSummary(product)),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  }
+
+  async getAdminById(id: string): Promise<ProductDetail> {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      include: PRODUCT_DETAIL_INCLUDE,
+    });
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+    return this.toDetail(product);
+  }
+
+  async create(dto: CreateProductDto): Promise<ProductDetail> {
+    const slug = dto.slug ? slugify(dto.slug) : slugify(dto.name);
+    await this.assertSlugAvailable(slug);
+    await this.assertVariantSkusAvailable(dto.variants);
+
+    const { displayPrice, displayCompareAtPrice, inStock } = this.computeDisplayFields(dto.variants);
+
+    const product = await this.prisma.product.create({
+      data: {
+        name: dto.name,
+        slug,
+        description: dto.description,
+        status: dto.status ?? ProductStatus.DRAFT,
+        categoryId: dto.categoryId,
+        brandId: dto.brandId,
+        seoTitle: dto.seoTitle,
+        seoDescription: dto.seoDescription,
+        displayPrice,
+        displayCompareAtPrice,
+        inStock,
+        variants: {
+          create: dto.variants.map((variant) => ({
+            sku: variant.sku,
+            name: variant.name,
+            attributes: variant.attributes,
+            price: variant.price,
+            compareAtPrice: variant.compareAtPrice,
+            stock: variant.stock,
+            isDefault: variant.isDefault ?? false,
+          })),
+        },
+      },
+      include: PRODUCT_DETAIL_INCLUDE,
+    });
+
+    return this.toDetail(product);
+  }
+
+  async update(id: string, dto: UpdateProductDto): Promise<ProductDetail> {
+    const existing = await this.prisma.product.findUnique({ where: { id }, include: { variants: true } });
+    if (!existing) {
+      throw new NotFoundException('Product not found');
+    }
+
+    let slug: string | undefined;
+    if (dto.slug || dto.name) {
+      slug = slugify(dto.slug ?? dto.name!);
+      await this.assertSlugAvailable(slug, id);
+    }
+
+    if (dto.categoryId) {
+      const category = await this.prisma.category.findUnique({ where: { id: dto.categoryId } });
+      if (!category) {
+        throw new BadRequestException('Category not found');
+      }
+    }
+
+    const product = await this.prisma.$transaction(async (tx) => {
+      if (dto.variants) {
+        await this.assertVariantSkusAvailable(dto.variants, id);
+        const keepIds = dto.variants.filter((v) => v.id).map((v) => v.id!);
+        await tx.productVariant.deleteMany({
+          where: { productId: id, id: keepIds.length ? { notIn: keepIds } : undefined },
+        });
+        for (const variant of dto.variants) {
+          if (variant.id) {
+            await tx.productVariant.update({
+              where: { id: variant.id },
+              data: {
+                sku: variant.sku,
+                name: variant.name,
+                attributes: variant.attributes,
+                price: variant.price,
+                compareAtPrice: variant.compareAtPrice,
+                stock: variant.stock,
+                isDefault: variant.isDefault ?? false,
+              },
+            });
+          } else {
+            await tx.productVariant.create({
+              data: {
+                productId: id,
+                sku: variant.sku,
+                name: variant.name,
+                attributes: variant.attributes,
+                price: variant.price,
+                compareAtPrice: variant.compareAtPrice,
+                stock: variant.stock,
+                isDefault: variant.isDefault ?? false,
+              },
+            });
+          }
+        }
+      }
+
+      const currentVariants =
+        dto.variants ??
+        existing.variants.map((v) => ({
+          price: Number(v.price),
+          compareAtPrice: v.compareAtPrice ? Number(v.compareAtPrice) : undefined,
+          stock: v.stock,
+          isDefault: v.isDefault,
+        }));
+      const { displayPrice, displayCompareAtPrice, inStock } = this.computeDisplayFields(currentVariants);
+
+      return tx.product.update({
+        where: { id },
+        data: {
+          name: dto.name,
+          slug,
+          description: dto.description,
+          status: dto.status,
+          categoryId: dto.categoryId,
+          brandId: dto.brandId,
+          seoTitle: dto.seoTitle,
+          seoDescription: dto.seoDescription,
+          displayPrice,
+          displayCompareAtPrice,
+          inStock,
+        },
+        include: PRODUCT_DETAIL_INCLUDE,
+      });
+    });
+
+    return this.toDetail(product);
+  }
+
+  async remove(id: string): Promise<{ success: true }> {
+    const existing = await this.prisma.product.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Product not found');
+    }
+    await this.prisma.product.delete({ where: { id } });
+    return { success: true };
+  }
+
+  async addImage(
+    productId: string,
+    data: { url: string; altText?: string },
+  ): Promise<ProductDetail> {
+    const existing = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!existing) {
+      throw new NotFoundException('Product not found');
+    }
+    const maxPosition = await this.prisma.productImage.aggregate({
+      where: { productId },
+      _max: { position: true },
+    });
+    await this.prisma.productImage.create({
+      data: {
+        productId,
+        url: data.url,
+        altText: data.altText,
+        position: (maxPosition._max.position ?? -1) + 1,
+      },
+    });
+    return this.getAdminById(productId);
+  }
+
+  async removeImage(productId: string, imageId: string): Promise<ProductDetail> {
+    const image = await this.prisma.productImage.findUnique({ where: { id: imageId } });
+    if (!image || image.productId !== productId) {
+      throw new NotFoundException('Image not found');
+    }
+    await this.prisma.productImage.delete({ where: { id: imageId } });
+    return this.getAdminById(productId);
+  }
+
+  private computeDisplayFields(
+    variants: Pick<ProductVariantDto, 'price' | 'compareAtPrice' | 'stock' | 'isDefault'>[],
+  ): { displayPrice: number; displayCompareAtPrice: number | null; inStock: boolean } {
+    if (variants.length === 0) {
+      return { displayPrice: 0, displayCompareAtPrice: null, inStock: false };
+    }
+    const defaultVariant =
+      variants.find((v) => v.isDefault) ??
+      variants.reduce((cheapest, v) => (v.price < cheapest.price ? v : cheapest));
+    return {
+      displayPrice: defaultVariant.price,
+      displayCompareAtPrice: defaultVariant.compareAtPrice ?? null,
+      inStock: variants.some((v) => v.stock > 0),
+    };
+  }
+
+  private async assertSlugAvailable(slug: string, excludeId?: string): Promise<void> {
+    const existing = await this.prisma.product.findUnique({ where: { slug } });
+    if (existing && existing.id !== excludeId) {
+      throw new ConflictException('A product with this slug already exists');
+    }
+  }
+
+  private async assertVariantSkusAvailable(
+    variants: Pick<ProductVariantDto, 'id' | 'sku'>[],
+    excludeProductId?: string,
+  ): Promise<void> {
+    const skus = variants.map((v) => v.sku);
+    const duplicates = skus.filter((sku, i) => skus.indexOf(sku) !== i);
+    if (duplicates.length > 0) {
+      throw new BadRequestException(`Duplicate SKU(s) in request: ${[...new Set(duplicates)].join(', ')}`);
+    }
+    const conflicting = await this.prisma.productVariant.findMany({
+      where: { sku: { in: skus }, productId: excludeProductId ? { not: excludeProductId } : undefined },
+      select: { sku: true },
+    });
+    if (conflicting.length > 0) {
+      throw new ConflictException(
+        `SKU(s) already in use: ${conflicting.map((c) => c.sku).join(', ')}`,
+      );
+    }
+  }
+
+  private toSummary(product: ProductWithSummaryRelations): ProductSummary {
+    return {
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      status: product.status,
+      category: product.category,
+      brand: product.brand,
+      image: product.images[0] ?? null,
+      price: Number(product.displayPrice),
+      compareAtPrice: product.displayCompareAtPrice ? Number(product.displayCompareAtPrice) : null,
+      inStock: product.inStock,
+    };
+  }
+
+  private toDetail(product: ProductWithDetailRelations): ProductDetail {
+    return {
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      description: product.description,
+      status: product.status,
+      category: product.category,
+      brand: product.brand,
+      images: product.images,
+      variants: product.variants.map((variant) => ({
+        id: variant.id,
+        sku: variant.sku,
+        name: variant.name,
+        attributes: (variant.attributes as Record<string, string> | null) ?? null,
+        price: Number(variant.price),
+        compareAtPrice: variant.compareAtPrice ? Number(variant.compareAtPrice) : null,
+        stock: variant.stock,
+        isDefault: variant.isDefault,
+      })),
+      seoTitle: product.seoTitle,
+      seoDescription: product.seoDescription,
+    };
+  }
+}

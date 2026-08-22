@@ -17,7 +17,7 @@ export default function AccountPage() {
 
   if (status !== 'authenticated' || !user) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-md items-center justify-center px-4">
+      <main className="flex min-h-screen items-center justify-center bg-background px-4">
         <p className="text-sm text-text-secondary">Loading your account…</p>
       </main>
     );
@@ -31,24 +31,25 @@ export default function AccountPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-4">
       <div>
-        <h1 className="text-3xl font-bold text-text-primary">My account</h1>
+        <span className="font-mono text-2xs uppercase tracking-[0.15em] text-accent">Account</span>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-text-primary">My account</h1>
         <p className="mt-1 text-sm text-text-secondary">Signed in as {user.email}</p>
       </div>
 
-      <dl className="rounded-md border border-border bg-surface p-4 text-sm">
-        <div className="flex justify-between py-1">
+      <dl className="rounded-lg border border-border bg-surface p-5 text-sm shadow-card">
+        <div className="flex justify-between border-b border-border py-3 first:pt-0 last:border-0 last:pb-0">
           <dt className="text-text-secondary">Name</dt>
-          <dd className="text-text-primary">
+          <dd className="font-medium text-text-primary">
             {[user.firstName, user.lastName].filter(Boolean).join(' ') || '—'}
           </dd>
         </div>
-        <div className="flex justify-between py-1">
+        <div className="flex justify-between border-b border-border py-3 last:border-0 last:pb-0">
           <dt className="text-text-secondary">Email</dt>
-          <dd className="text-text-primary">{user.email}</dd>
+          <dd className="font-medium text-text-primary">{user.email}</dd>
         </div>
-        <div className="flex justify-between py-1">
+        <div className="flex justify-between py-3 last:border-0 last:pb-0">
           <dt className="text-text-secondary">Account type</dt>
-          <dd className="text-text-primary">{user.role}</dd>
+          <dd className="font-medium text-text-primary">{user.role}</dd>
         </div>
       </dl>
 

@@ -22,6 +22,41 @@ interface RequestOptions {
   auth?: boolean;
 }
 
+export interface UploadOptions {
+  method?: string;
+  formData: FormData;
+  auth?: boolean;
+}
+
+export async function apiUpload<T>(path: string, options: UploadOptions): Promise<T> {
+  const { method = 'POST', formData, auth = true } = options;
+  const headers: Record<string, string> = {};
+
+  if (auth) {
+    const token = accessTokenProvider();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+  }
+
+  // No Content-Type header: the browser sets the multipart boundary for FormData.
+  const response = await fetch(`${API_URL}${path}`, {
+    method,
+    headers,
+    credentials: 'include',
+    body: formData,
+  });
+
+  const isJson = response.headers.get('content-type')?.includes('application/json');
+  const payload = isJson ? await response.json() : null;
+
+  if (!response.ok) {
+    throw new ApiError(response.status, extractMessage(payload, 'Upload failed'));
+  }
+
+  return payload as T;
+}
+
 function extractMessage(payload: unknown, fallback: string): string {
   if (payload && typeof payload === 'object' && 'message' in payload) {
     const message = (payload as { message: unknown }).message;

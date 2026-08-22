@@ -34,6 +34,84 @@ export interface UserAddress {
   isDefault: boolean;
 }
 
+export const ProductStatus = {
+  DRAFT: 'DRAFT',
+  ACTIVE: 'ACTIVE',
+  ARCHIVED: 'ARCHIVED',
+} as const;
+
+export type ProductStatus = (typeof ProductStatus)[keyof typeof ProductStatus];
+
+export interface Brand {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  logoUrl: string | null;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  imageUrl: string | null;
+  parentId: string | null;
+}
+
+export interface ProductImage {
+  id: string;
+  url: string;
+  altText: string | null;
+  position: number;
+}
+
+export interface ProductVariant {
+  id: string;
+  sku: string;
+  name: string;
+  attributes: Record<string, string> | null;
+  price: number;
+  compareAtPrice: number | null;
+  stock: number;
+  isDefault: boolean;
+}
+
+export interface ProductSummary {
+  id: string;
+  name: string;
+  slug: string;
+  status: ProductStatus;
+  category: Pick<Category, 'id' | 'name' | 'slug'>;
+  brand: Pick<Brand, 'id' | 'name' | 'slug'> | null;
+  image: ProductImage | null;
+  price: number;
+  compareAtPrice: number | null;
+  inStock: boolean;
+}
+
+export interface ProductDetail {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  status: ProductStatus;
+  category: Pick<Category, 'id' | 'name' | 'slug'>;
+  brand: Pick<Brand, 'id' | 'name' | 'slug'> | null;
+  images: ProductImage[];
+  variants: ProductVariant[];
+  seoTitle: string | null;
+  seoDescription: string | null;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface ApiErrorResponse {
   statusCode: number;
   message: string | string[];

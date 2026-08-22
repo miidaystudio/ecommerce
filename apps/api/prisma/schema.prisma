@@ -66,3 +66,99 @@ model RefreshToken {
   @@index([userId])
   @@map("refresh_tokens")
 }
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model Brand {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  description String?
+  logoUrl     String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("brands")
+}
+
+model Category {
+  id          String     @id @default(uuid())
+  name        String
+  slug        String     @unique
+  description String?
+  imageUrl    String?
+  parentId    String?
+  parent      Category?  @relation("CategoryToSubcategory", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryToSubcategory")
+  products    Product[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+model Product {
+  id              String          @id @default(uuid())
+  name            String
+  slug            String          @unique
+  description     String
+  status          ProductStatus   @default(DRAFT)
+  categoryId      String
+  category        Category        @relation(fields: [categoryId], references: [id])
+  brandId         String?
+  brand           Brand?          @relation(fields: [brandId], references: [id])
+  seoTitle        String?
+  seoDescription  String?
+  images          ProductImage[]
+  variants        ProductVariant[]
+  // Denormalized from variants (recomputed server-side on every variant write) so
+  // listing/filtering/sorting stays a single indexed query instead of an aggregate join.
+  displayPrice           Decimal  @db.Decimal(10, 2) @default(0)
+  displayCompareAtPrice  Decimal? @db.Decimal(10, 2)
+  inStock                Boolean  @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([status])
+  @@index([displayPrice])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  altText   String?
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+model ProductVariant {
+  id              String   @id @default(uuid())
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku             String   @unique
+  name            String
+  attributes      Json?
+  price           Decimal  @db.Decimal(10, 2)
+  compareAtPrice  Decimal? @db.Decimal(10, 2)
+  stock           Int      @default(0)
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([productId])
+  @@map("product_variants")
+}

@@ -1,7 +1,10 @@
 import type { Config } from 'tailwindcss';
 
-// Design tokens sourced from design.md. Admin extends the shared palette with its own
-// dark sidebar tokens to stay visually distinct from the storefront.
+// Design tokens sourced from design.md, which is itself sourced from the
+// miiday-storefront-designs.html / miiday-admin-designs.html reference files.
+// Admin shares the storefront's palette but stays visually distinct via its
+// dark sidebar tokens. Never hardcode colors/fonts in components — update
+// design.md first, then propagate here.
 const config: Config = {
   content: [
     './app/**/*.{ts,tsx}',
@@ -12,42 +15,63 @@ const config: Config = {
     extend: {
       colors: {
         primary: {
-          DEFAULT: '#1E40AF',
-          hover: '#1E3A8A',
+          DEFAULT: '#4A4238',
+          hover: '#35302A',
+          foreground: '#F5F2EA',
         },
-        secondary: '#F59E0B',
-        accent: '#10B981',
-        danger: '#DC2626',
-        warning: '#D97706',
-        background: '#FFFFFF',
-        surface: '#F8FAFC',
-        border: '#E2E8F0',
+        accent: {
+          DEFAULT: '#C9A876',
+          soft: '#D6B370',
+          foreground: '#FAF9F6',
+        },
+        success: '#7C9885',
+        danger: '#C17767',
+        warning: {
+          DEFAULT: '#D6B370',
+          foreground: '#35302A',
+        },
+        background: '#FAF9F6',
+        surface: '#F3F1EA',
+        border: '#E8E4DA',
+        'muted-border': '#C0BAB0',
         text: {
-          primary: '#0F172A',
-          secondary: '#64748B',
-          disabled: '#CBD5E1',
+          primary: '#2E2A24',
+          secondary: '#7A756B',
+          strong: '#35302A',
         },
         admin: {
-          'sidebar-bg': '#0F172A',
-          'sidebar-text': '#E2E8F0',
-          accent: '#3B82F6',
+          'sidebar-bg': '#2E2A24',
+          'sidebar-text': 'rgba(232,228,218,0.75)',
+          'sidebar-text-strong': '#F5F2EA',
+          'sidebar-active-bg': 'rgba(201,168,118,0.15)',
+          'sidebar-active-text': '#C9A876',
+          'sidebar-section-label': '#7A756B',
         },
       },
       fontFamily: {
-        sans: ['var(--font-inter)', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        sans: ['var(--font-manrope)', 'var(--font-inter)', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        mono: ['var(--font-jetbrains-mono)', 'ui-monospace', 'monospace'],
       },
       fontSize: {
+        '2xs': ['11px', { lineHeight: '1.4' }],
         xs: ['12px', { lineHeight: '1.5' }],
-        sm: ['14px', { lineHeight: '1.5' }],
-        base: ['16px', { lineHeight: '1.5' }],
-        lg: ['18px', { lineHeight: '1.5' }],
-        xl: ['20px', { lineHeight: '1.2' }],
-        '2xl': ['24px', { lineHeight: '1.2' }],
-        '3xl': ['30px', { lineHeight: '1.2' }],
-        '4xl': ['36px', { lineHeight: '1.2' }],
+        sm: ['13px', { lineHeight: '1.5' }],
+        base: ['14px', { lineHeight: '1.5' }],
+        md: ['16px', { lineHeight: '1.6' }],
+        lg: ['20px', { lineHeight: '1.3' }],
+        xl: ['24px', { lineHeight: '1.2' }],
+        '2xl': ['32px', { lineHeight: '1.15' }],
+        hero: ['56px', { lineHeight: '1.1', letterSpacing: '-0.03em' }],
       },
       borderRadius: {
-        md: '6px',
+        DEFAULT: '10px',
+        sm: '8px',
+        md: '10px',
+        lg: '12px',
+        xl: '24px',
+      },
+      boxShadow: {
+        card: '0 10px 40px -8px rgba(74,66,56,0.10)',
       },
     },
   },

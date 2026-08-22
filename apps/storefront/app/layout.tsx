@@ -1,7 +1,13 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Manrope, Inter, JetBrains_Mono } from 'next/font/google';
 import { AuthProvider } from '../components/auth/AuthProvider';
 import './globals.css';
+
+const manrope = Manrope({
+  subsets: ['latin'],
+  variable: '--font-manrope',
+  display: 'swap',
+});
 
 const inter = Inter({
   subsets: ['latin'],
@@ -9,15 +15,21 @@ const inter = Inter({
   display: 'swap',
 });
 
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
-  title: 'Storefront',
-  description: 'Shop across multiple product categories.',
+  title: 'miiday',
+  description: 'Everything for a slower home — shop across multiple product categories.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body className="min-h-screen antialiased">
+    <html lang="en" className={`${manrope.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
+      <body className="min-h-screen bg-background text-text-primary antialiased">
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

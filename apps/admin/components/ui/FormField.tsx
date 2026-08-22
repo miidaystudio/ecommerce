@@ -10,19 +10,19 @@ export const FormField = forwardRef<HTMLInputElement, FormFieldProps>(function F
   ref,
 ) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium text-text-primary">
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-xs font-medium text-text-primary">
         {label}
       </label>
       <input
         ref={ref}
         id={id}
-        className={`rounded-md border px-3 py-2 text-base text-text-primary outline-none focus:ring-2 focus:ring-admin-accent ${
+        className={`h-11 rounded border px-3.5 text-base text-text-primary outline-none transition focus:border-primary ${
           error ? 'border-danger' : 'border-border'
         } ${className}`}
         {...props}
       />
-      {error ? <span className="text-sm text-danger">{error}</span> : null}
+      {error ? <span className="text-xs text-danger">{error}</span> : null}
     </div>
   );
 });
