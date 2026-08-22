@@ -112,6 +112,41 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
+export interface CartItemView {
+  id: string;
+  variantId: string;
+  quantity: number;
+  price: number;
+  compareAtPrice: number | null;
+  lineTotal: number;
+  stock: number;
+  available: boolean;
+  product: { id: string; name: string; slug: string };
+  variant: { name: string; attributes: Record<string, string> | null };
+  image: { url: string; altText: string | null } | null;
+}
+
+export interface CartResponse {
+  items: CartItemView[];
+  subtotal: number;
+  itemCount: number;
+}
+
+export interface WishlistItemView {
+  id: string;
+  productId: string;
+  product: {
+    id: string;
+    name: string;
+    slug: string;
+    price: number;
+    compareAtPrice: number | null;
+    inStock: boolean;
+    available: boolean;
+  };
+  image: { url: string; altText: string | null } | null;
+}
+
 export interface ApiErrorResponse {
   statusCode: number;
   message: string | string[];

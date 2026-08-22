@@ -27,6 +27,8 @@ model User {
   isBlocked     Boolean        @default(false)
   addresses     Address[]
   refreshTokens RefreshToken[]
+  cartItems     CartItem[]
+  wishlistItems WishlistItem[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -117,6 +119,7 @@ model Product {
   seoDescription  String?
   images          ProductImage[]
   variants        ProductVariant[]
+  wishlistedBy    WishlistItem[]
   // Denormalized from variants (recomputed server-side on every variant write) so
   // listing/filtering/sorting stays a single indexed query instead of an aggregate join.
   displayPrice           Decimal  @db.Decimal(10, 2) @default(0)
@@ -156,9 +159,42 @@ model ProductVariant {
   compareAtPrice  Decimal? @db.Decimal(10, 2)
   stock           Int      @default(0)
   isDefault       Boolean  @default(false)
+  cartItems       CartItem[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@index([productId])
   @@map("product_variants")
+}
+
+model CartItem {
+  id            String         @id @default(uuid())
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  variantId     String
+  variant       ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  quantity      Int            @default(1)
+  // Captured at add-time per arc.md's cart→order data flow; the cart API always
+  // returns the *current* variant price for display/checkout — this snapshot is
+  // for audit/analytics only, never trusted as the authoritative price.
+  priceSnapshot Decimal        @db.Decimal(10, 2)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([userId, variantId])
+  @@index([userId])
+  @@map("cart_items")
+}
+
+model WishlistItem {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@map("wishlist_items")
 }
