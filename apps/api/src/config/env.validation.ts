@@ -38,6 +38,27 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   REFRESH_COOKIE_NAME?: string;
+
+  @IsString()
+  RAZORPAY_KEY_ID!: string;
+
+  @IsString()
+  RAZORPAY_KEY_SECRET!: string;
+
+  @IsString()
+  RAZORPAY_WEBHOOK_SECRET!: string;
+
+  @IsOptional()
+  @IsString()
+  PAYMENTS_CURRENCY?: string;
+
+  @IsOptional()
+  @IsString()
+  FREE_SHIPPING_THRESHOLD?: string;
+
+  @IsOptional()
+  @IsString()
+  FLAT_SHIPPING_FEE?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

@@ -13,6 +13,7 @@ export default function CartPage() {
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
   const subtotal = selectSubtotal(items);
+  const hasUnavailableItems = items.some((item) => !item.available || item.stock === 0);
 
   if (items.length === 0) {
     return (
@@ -130,10 +131,16 @@ export default function CartPage() {
             <span className="text-text-secondary">Subtotal</span>
             <span className="font-semibold text-text-primary">{formatPrice(subtotal)}</span>
           </div>
-          <Button type="button" disabled className="mt-5 w-full">
-            Proceed to checkout
-          </Button>
-          <p className="mt-2 text-xs text-text-secondary">Checkout arrives in a future phase.</p>
+          {hasUnavailableItems ? (
+            <p className="mt-3 text-xs text-danger">
+              Remove or resolve unavailable items before checking out.
+            </p>
+          ) : null}
+          <Link href="/checkout" className="mt-5 block">
+            <Button type="button" disabled={hasUnavailableItems} className="w-full">
+              Proceed to checkout
+            </Button>
+          </Link>
         </div>
       </div>
     </div>

@@ -112,6 +112,89 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
+export const OrderStatus = {
+  PENDING: 'PENDING',
+  CONFIRMED: 'CONFIRMED',
+  PACKED: 'PACKED',
+  SHIPPED: 'SHIPPED',
+  DELIVERED: 'DELIVERED',
+  CANCELLED: 'CANCELLED',
+  RETURNED: 'RETURNED',
+} as const;
+
+export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
+
+export const PaymentMethod = {
+  RAZORPAY: 'RAZORPAY',
+  COD: 'COD',
+} as const;
+
+export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];
+
+export const PaymentStatus = {
+  PENDING: 'PENDING',
+  PAID: 'PAID',
+  FAILED: 'FAILED',
+  REFUNDED: 'REFUNDED',
+} as const;
+
+export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
+
+export interface OrderItemView {
+  id: string;
+  productName: string;
+  variantName: string;
+  sku: string;
+  attributes: Record<string, string> | null;
+  imageUrl: string | null;
+  price: number;
+  quantity: number;
+  lineTotal: number;
+}
+
+export interface OrderShippingAddress {
+  fullName: string;
+  phone: string;
+  line1: string;
+  line2: string | null;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+}
+
+export interface OrderSummary {
+  id: string;
+  orderNumber: string;
+  status: OrderStatus;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
+  total: number;
+  itemCount: number;
+  createdAt: string;
+}
+
+export interface OrderDetail {
+  id: string;
+  orderNumber: string;
+  status: OrderStatus;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
+  shippingAddress: OrderShippingAddress;
+  subtotal: number;
+  shippingFee: number;
+  total: number;
+  items: OrderItemView[];
+  createdAt: string;
+}
+
+export interface CreateOrderResponse {
+  order: OrderDetail;
+  // Present only when paymentMethod is RAZORPAY — the storefront uses these
+  // to open Razorpay Checkout.js.
+  razorpay: { keyId: string; razorpayOrderId: string; amount: number; currency: string } | null;
+}
+
 export interface CartItemView {
   id: string;
   variantId: string;

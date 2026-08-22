@@ -29,6 +29,7 @@ model User {
   refreshTokens RefreshToken[]
   cartItems     CartItem[]
   wishlistItems WishlistItem[]
+  orders        Order[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -160,6 +161,8 @@ model ProductVariant {
   stock           Int      @default(0)
   isDefault       Boolean  @default(false)
   cartItems       CartItem[]
+  orderItems      OrderItem[]
+  inventoryAdjustments InventoryAdjustment[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -197,4 +200,125 @@ model WishlistItem {
   @@unique([userId, productId])
   @@index([userId])
   @@map("wishlist_items")
+}
+
+enum OrderStatus {
+  PENDING // created, awaiting payment (Razorpay) or just placed (COD)
+  CONFIRMED // payment captured (Razorpay) or accepted for fulfillment (COD) — stock deducted
+  PACKED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum PaymentMethod {
+  RAZORPAY
+  COD
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum InventoryAdjustmentReason {
+  ORDER_PLACED
+  ORDER_CANCELLED
+  MANUAL
+  RESTOCK
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  orderNumber String      @unique
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  status      OrderStatus @default(PENDING)
+
+  // Shipping address is copied onto the order at checkout time (never a live FK)
+  // so later edits/deletion of the source Address never alter a placed order.
+  shippingFullName   String
+  shippingPhone      String
+  shippingLine1      String
+  shippingLine2      String?
+  shippingCity       String
+  shippingState      String
+  shippingPostalCode String
+  shippingCountry    String
+
+  subtotal    Decimal       @db.Decimal(10, 2)
+  shippingFee Decimal       @db.Decimal(10, 2) @default(0)
+  total       Decimal       @db.Decimal(10, 2)
+  paymentMethod PaymentMethod
+
+  items   OrderItem[]
+  payment Payment?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String          @id @default(uuid())
+  orderId   String
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  // Immutable snapshot at order time per arc.md — never a live reference.
+  productName String
+  variantName String
+  sku         String
+  attributes  Json?
+  imageUrl    String?
+  price       Decimal @db.Decimal(10, 2)
+  quantity    Int
+  lineTotal   Decimal @db.Decimal(10, 2)
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model Payment {
+  id      String        @id @default(uuid())
+  orderId String        @unique
+  order   Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  method  PaymentMethod
+  status  PaymentStatus @default(PENDING)
+  amount  Decimal       @db.Decimal(10, 2)
+
+  // Razorpay-specific — null for COD.
+  razorpayOrderId   String? @unique
+  razorpayPaymentId String? @unique
+  razorpaySignature String?
+
+  failureReason String?
+  paidAt        DateTime?
+  refundedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("payments")
+}
+
+model InventoryAdjustment {
+  id        String                     @id @default(uuid())
+  variantId String
+  variant   ProductVariant             @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  change    Int
+  reason    InventoryAdjustmentReason
+  orderId   String?
+  note      String?
+  createdAt DateTime                   @default(now())
+
+  @@index([variantId])
+  @@map("inventory_adjustments")
 }
