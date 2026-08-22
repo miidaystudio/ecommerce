@@ -8,11 +8,15 @@ import { ApiError } from '../../lib/api/client';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { resolveImageUrl } from '../../lib/utils/image-url';
 import { formatPrice } from '../../lib/utils/format-price';
+import { selectItemCount, useCartStore } from '../../store/cartStore';
+import { CartIcon } from '../ui/icons';
 
 const SEARCH_DEBOUNCE_MS = 250;
 
 export function SiteHeader() {
   const { user, status } = useAuth();
+  const cartItems = useCartStore((s) => s.items);
+  const itemCount = selectItemCount(cartItems);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ProductSummary[]>([]);
   const [open, setOpen] = useState(false);
@@ -118,7 +122,19 @@ export function SiteHeader() {
           ) : null}
         </div>
 
-        <nav className="ml-auto shrink-0">
+        <nav className="ml-auto flex shrink-0 items-center gap-4">
+          <Link
+            href="/cart"
+            aria-label="Cart"
+            className="relative flex h-9 w-9 items-center justify-center rounded-full text-text-primary transition hover:text-primary-hover"
+          >
+            <CartIcon />
+            {itemCount > 0 ? (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 font-mono text-2xs text-accent-foreground">
+                {itemCount}
+              </span>
+            ) : null}
+          </Link>
           <Link
             href={status === 'authenticated' ? '/account' : '/login'}
             className="text-sm font-medium text-text-primary hover:text-primary-hover"

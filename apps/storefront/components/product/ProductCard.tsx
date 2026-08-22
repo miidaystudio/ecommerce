@@ -1,9 +1,33 @@
+'use client';
+
 import Link from 'next/link';
+import type { MouseEvent } from 'react';
 import type { ProductSummary } from '@ecommerce/shared-types';
 import { resolveImageUrl } from '../../lib/utils/image-url';
 import { formatPrice } from '../../lib/utils/format-price';
+import { useWishlistStore } from '../../store/wishlistStore';
+import { HeartIcon } from '../ui/icons';
 
 export function ProductCard({ product }: { product: ProductSummary }) {
+  const isWishlisted = useWishlistStore((s) => s.items.some((item) => item.productId === product.id));
+  const toggleWishlist = useWishlistStore((s) => s.toggle);
+
+  function handleWishlistClick(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    void toggleWishlist(
+      {
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        price: product.price,
+        compareAtPrice: product.compareAtPrice,
+        inStock: product.inStock,
+      },
+      product.image ? { url: product.image.url, altText: product.image.altText } : null,
+    );
+  }
+
   return (
     <Link
       href={`/products/${product.slug}`}
@@ -28,6 +52,17 @@ export function ProductCard({ product }: { product: ProductSummary }) {
             Out of stock
           </span>
         ) : null}
+        <button
+          type="button"
+          onClick={handleWishlistClick}
+          aria-pressed={isWishlisted}
+          aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+          className={`absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-background/90 shadow-card transition ${
+            isWishlisted ? 'text-danger' : 'text-text-secondary hover:text-primary'
+          }`}
+        >
+          <HeartIcon filled={isWishlisted} className="h-4 w-4" />
+        </button>
       </div>
       <div className="flex flex-col gap-1 p-4">
         {product.brand ? (

@@ -1,10 +1,15 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ProductDetail, ProductVariant } from '@ecommerce/shared-types';
 import { Button } from '../ui/Button';
+import { HeartIcon } from '../ui/icons';
 import { resolveImageUrl } from '../../lib/utils/image-url';
 import { formatPrice } from '../../lib/utils/format-price';
+import { useCartStore } from '../../store/cartStore';
+import { useWishlistStore } from '../../store/wishlistStore';
+
+const ADDED_STATE_MS = 1500;
 
 function getInitialVariant(variants: ProductVariant[]): ProductVariant | undefined {
   return variants.find((variant) => variant.isDefault) ?? variants.find((variant) => variant.stock > 0) ?? variants[0];
@@ -27,6 +32,19 @@ export function ProductDetailView({ product }: { product: ProductDetail }) {
 
   const [selected, setSelected] = useState<ProductVariant | undefined>(() => getInitialVariant(variants));
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [adding, setAdding] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
+
+  const addItem = useCartStore((s) => s.addItem);
+  const cartError = useCartStore((s) => s.error);
+  const toggleWishlist = useWishlistStore((s) => s.toggle);
+  const isWishlisted = useWishlistStore((s) => s.items.some((item) => item.productId === product.id));
+
+  useEffect(() => {
+    if (!justAdded) return;
+    const timer = setTimeout(() => setJustAdded(false), ADDED_STATE_MS);
+    return () => clearTimeout(timer);
+  }, [justAdded]);
 
   const selection: Record<string, string> = selected?.attributes ?? {};
 
@@ -43,6 +61,35 @@ export function ProductDetailView({ product }: { product: ProductDetail }) {
   const images = product.images;
   const mainImage = images[activeImageIndex];
   const isOutOfStock = !selected || selected.stock === 0;
+
+  async function handleAddToCart() {
+    if (!selected) return;
+    setAdding(true);
+    await addItem(
+      selected,
+      { id: product.id, name: product.name, slug: product.slug },
+      mainImage ? { url: mainImage.url, altText: mainImage.altText } : null,
+      1,
+    );
+    setAdding(false);
+    if (!useCartStore.getState().error) {
+      setJustAdded(true);
+    }
+  }
+
+  function handleWishlistToggle() {
+    void toggleWishlist(
+      {
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        price: selected?.price ?? 0,
+        compareAtPrice: selected?.compareAtPrice ?? null,
+        inStock: selected ? selected.stock > 0 : false,
+      },
+      mainImage ? { url: mainImage.url, altText: mainImage.altText } : null,
+    );
+  }
 
   return (
     <div className="mx-auto grid max-w-6xl grid-cols-1 gap-12 px-6 py-10 md:grid-cols-2">
@@ -94,6 +141,19 @@ export function ProductDetailView({ product }: { product: ProductDetail }) {
               {formatPrice(selected.compareAtPrice)}
             </span>
           ) : null}
+          <button
+            type="button"
+            onClick={handleWishlistToggle}
+            aria-pressed={isWishlisted}
+            aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+            className={`ml-auto flex h-9 w-9 items-center justify-center rounded-full border transition ${
+              isWishlisted
+                ? 'border-danger/40 text-danger'
+                : 'border-border text-text-secondary hover:border-primary/40 hover:text-primary'
+            }`}
+          >
+            <HeartIcon filled={isWishlisted} className="h-4 w-4" />
+          </button>
         </div>
 
         {attributeKeys.map((key) => {
@@ -152,13 +212,13 @@ export function ProductDetailView({ product }: { product: ProductDetail }) {
 
         <Button
           type="button"
-          disabled={isOutOfStock}
-          onClick={() => console.log('Add to cart — coming in a future phase', selected)}
+          disabled={isOutOfStock || adding}
+          onClick={handleAddToCart}
           className="mt-8 w-full md:w-auto md:px-10"
         >
-          {isOutOfStock ? 'Out of stock' : 'Add to cart'}
+          {isOutOfStock ? 'Out of stock' : justAdded ? 'Added ✓' : adding ? 'Adding…' : 'Add to cart'}
         </Button>
-        <p className="mt-2 text-xs text-text-secondary">Cart functionality is coming in a future phase.</p>
+        {cartError ? <p className="mt-2 text-xs text-danger">{cartError}</p> : null}
       </div>
     </div>
   );
