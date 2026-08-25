@@ -2,6 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-background text-text-primary font-sans;
+@layer base {
+  body {
+    @apply bg-background text-text-primary font-sans antialiased selection:bg-accent/30 selection:text-text-primary;
+  }
 }
+
+/* Custom scrollbar for search dropdowns and carousels */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #C0BAB0;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #7A756B;
+}
+
+/* Placeholder styling helper for image aspect ratios */
+.placeholder-img {
+  background: #F3F1EA;
+  border: 1px dashed #C0BAB0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #7A756B;
+  font-size: 13px;
+}
+
