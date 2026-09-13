@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Manrope, Inter, JetBrains_Mono } from 'next/font/google';
 import { AuthProvider } from '../components/auth/AuthProvider';
+import { SITE_URL } from '../lib/utils/site-url';
 import './globals.css';
 
 const manrope = Manrope({
@@ -22,8 +23,29 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'miiday',
+  // metadataBase makes every relative canonical and OG image below resolve to
+  // an absolute URL, which both require.
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: 'miiday — everything for a slower home',
+    // Page titles fill the %s, so each page reads as "<page> · miiday".
+    template: '%s · miiday',
+  },
   description: 'Everything for a slower home — shop across multiple product categories.',
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    siteName: 'miiday',
+    title: 'miiday — everything for a slower home',
+    description: 'Everything for a slower home — shop across multiple product categories.',
+    url: '/',
+  },
+  twitter: { card: 'summary_large_image' },
+  robots: {
+    // Account, cart and checkout are per-user pages with nothing to index.
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

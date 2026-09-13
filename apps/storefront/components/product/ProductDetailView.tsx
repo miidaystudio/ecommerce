@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import type { ProductDetail, ProductVariant } from '@ecommerce/shared-types';
 import { Button } from '../ui/Button';
@@ -94,12 +95,17 @@ export function ProductDetailView({ product }: { product: ProductDetail }) {
   return (
     <div className="mx-auto grid max-w-6xl grid-cols-1 gap-12 px-6 py-10 md:grid-cols-2">
       <div>
-        <div className="aspect-[4/5] w-full overflow-hidden rounded-lg border border-border bg-surface">
+        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-lg border border-border bg-surface">
           {mainImage ? (
-            <img
+            <Image
               src={resolveImageUrl(mainImage.url)}
               alt={mainImage.altText ?? product.name}
-              className="h-full w-full object-cover"
+              fill
+              // Full width on phones, half the 1152px container on desktop.
+              sizes="(max-width: 768px) 100vw, 576px"
+              // The LCP element on a product page, so it is not lazy-loaded.
+              priority
+              className="object-cover"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
@@ -123,7 +129,14 @@ export function ProductDetailView({ product }: { product: ProductDetail }) {
                   index === activeImageIndex ? 'border-primary' : 'border-border hover:border-primary/40'
                 }`}
               >
-                <img src={resolveImageUrl(image.url)} alt="" className="h-full w-full object-cover" />
+                <Image
+                  src={resolveImageUrl(image.url)}
+                  alt=""
+                  width={56}
+                  height={64}
+                  sizes="56px"
+                  className="h-full w-full object-cover"
+                />
               </button>
             ))}
           </div>

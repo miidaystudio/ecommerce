@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import type { AdminOrderDetail } from '@ecommerce/shared-types';
 import { ApiError } from '../../../../lib/api/client';
 import { ordersApi } from '../../../../lib/api/orders.api';
-import { formatPrice } from '../../../../lib/utils/format-price';
+import { formatIncludedGst, formatPrice } from '../../../../lib/utils/format-price';
 
 export default function InvoicePage() {
   const params = useParams<{ id: string }>();
@@ -93,6 +93,12 @@ export default function InvoicePage() {
             <span>Subtotal</span>
             <span>{formatPrice(order.subtotal)}</span>
           </div>
+          {order.discount > 0 ? (
+            <div className="flex justify-between py-1 text-text-secondary">
+              <span>Discount{order.couponCode ? ` (${order.couponCode})` : ''}</span>
+              <span>−{formatPrice(order.discount)}</span>
+            </div>
+          ) : null}
           <div className="flex justify-between py-1 text-text-secondary">
             <span>Shipping</span>
             <span>{order.shippingFee === 0 ? 'Free' : formatPrice(order.shippingFee)}</span>
@@ -101,6 +107,10 @@ export default function InvoicePage() {
             <span>Total</span>
             <span>{formatPrice(order.total)}</span>
           </div>
+          {order.taxAmount > 0 ? (
+            // Prices are tax-inclusive: this is the GST inside the total, not added to it.
+            <p className="pb-1 text-right text-2xs text-text-secondary">{formatIncludedGst(order.taxAmount, order.taxRatePercent)}</p>
+          ) : null}
         </div>
       </div>
 

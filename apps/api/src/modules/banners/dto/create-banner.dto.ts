@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { IsSafeUrl } from '../../../common/decorators/is-safe-url.decorator';
 
 export class CreateBannerDto {
   @IsString()
@@ -12,13 +13,16 @@ export class CreateBannerDto {
   @MaxLength(240)
   subtitle?: string;
 
+  // Both render into an href/src on the public storefront, so they are
+  // constrained to safe schemes here — staff are not trusted to supply
+  // arbitrary URLs (see prd.md: staff have limited privileges).
   @IsOptional()
-  @IsString()
+  @IsSafeUrl()
   @MaxLength(500)
   imageUrl?: string;
 
   @IsOptional()
-  @IsString()
+  @IsSafeUrl()
   @MaxLength(500)
   linkUrl?: string;
 

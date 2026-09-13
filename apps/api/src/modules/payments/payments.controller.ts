@@ -1,3 +1,4 @@
+import { SkipThrottle } from '@nestjs/throttler';
 import { Controller, Headers, HttpCode, Logger, Post, Req, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import { PaymentsService } from './payments.service';
@@ -16,6 +17,11 @@ interface RazorpayWebhookPayload {
   };
 }
 
+// Razorpay retries a webhook it believes failed. A 429 here would look like
+// a failure and, worse, could drop the confirmation that marks an order PAID —
+// so this route is never rate limited. It is already authenticated by an HMAC
+// signature over the raw body, which is a far stronger gate than an IP count.
+@SkipThrottle()
 @Controller('payments/webhook')
 export class PaymentsController {
   private readonly logger = new Logger(PaymentsController.name);

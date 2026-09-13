@@ -8,6 +8,15 @@ const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@ecommerce/shared-types'],
   outputFileTracingRoot: path.join(dirname, '../../'),
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+        pathname: '/**',
+      },
+    ],
+  },
 };
 
 export default nextConfig;

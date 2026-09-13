@@ -1,12 +1,19 @@
-import type { AuthUser, SessionResponse } from '@ecommerce/shared-types';
+import type {
+  AuthUser,
+  RegisterResponse,
+  ResendOtpPayload,
+  ResendOtpResponse,
+  SessionResponse,
+  VerifyOtpPayload,
+} from '@ecommerce/shared-types';
 import { apiFetch } from './client';
 
 export interface RegisterPayload {
   email: string;
   password: string;
+  phone: string;
   firstName?: string;
   lastName?: string;
-  phone?: string;
 }
 
 export interface LoginPayload {
@@ -15,8 +22,14 @@ export interface LoginPayload {
 }
 
 export const authApi = {
-  register: (payload: RegisterPayload): Promise<SessionResponse> =>
-    apiFetch<SessionResponse>('/auth/register', { method: 'POST', body: payload }),
+  register: (payload: RegisterPayload): Promise<RegisterResponse> =>
+    apiFetch<RegisterResponse>('/auth/register', { method: 'POST', body: payload }),
+
+  verifyOtp: (payload: VerifyOtpPayload): Promise<SessionResponse> =>
+    apiFetch<SessionResponse>('/auth/verify-otp', { method: 'POST', body: payload }),
+
+  resendOtp: (payload: ResendOtpPayload): Promise<ResendOtpResponse> =>
+    apiFetch<ResendOtpResponse>('/auth/resend-otp', { method: 'POST', body: payload }),
 
   login: (payload: LoginPayload): Promise<SessionResponse> =>
     apiFetch<SessionResponse>('/auth/login', { method: 'POST', body: payload }),

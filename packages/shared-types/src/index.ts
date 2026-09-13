@@ -12,12 +12,41 @@ export interface AuthUser {
   firstName: string | null;
   lastName: string | null;
   phone: string | null;
+  phoneNumber: string | null;
   role: UserRole;
+  isVerified?: boolean;
+  mustChangePassword?: boolean;
 }
 
 export interface SessionResponse {
   accessToken: string;
   user: AuthUser;
+}
+
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface RegisterResponse {
+  message: string;
+  email: string;
+  requiresVerification: boolean;
+  resendAvailableIn: number;
+}
+
+export interface VerifyOtpPayload {
+  email: string;
+  otp: string;
+}
+
+export interface ResendOtpPayload {
+  email: string;
+}
+
+export interface ResendOtpResponse {
+  message: string;
+  resendAvailableIn: number;
 }
 
 export interface UserAddress {
@@ -188,8 +217,25 @@ export interface OrderDetail {
   discount: number;
   couponCode: string | null;
   total: number;
+  /** GST contained in `total` — prices are tax-inclusive, so this is never added on top. 0 for orders placed before tax was tracked. */
+  taxAmount: number;
+  taxRatePercent: number;
   items: OrderItemView[];
   createdAt: string;
+}
+
+/** Server-computed price breakdown; `taxIncluded` is the GST already inside `total`. */
+export interface PriceQuote {
+  subtotal: number;
+  discount: number;
+  shippingFee: number;
+  total: number;
+  taxIncluded: number;
+  taxRatePercent: number;
+}
+
+export interface OrderQuote extends PriceQuote {
+  couponCode: string | null;
 }
 
 export interface CreateOrderResponse {
@@ -436,4 +482,112 @@ export interface HealthCheckResponse {
   status: 'ok' | 'error';
   timestamp: string;
   database: 'up' | 'down';
+}
+
+// --- Reports (Phase 7) ---
+
+export type ReportGroupBy = 'day' | 'week' | 'month';
+
+export interface SalesReportBucket {
+  period: string;
+  orderCount: number;
+  grossRevenue: number;
+  discount: number;
+  shipping: number;
+  netRevenue: number;
+}
+
+export interface SalesReport {
+  from: string;
+  to: string;
+  groupBy: ReportGroupBy;
+  totals: {
+    orderCount: number;
+    grossRevenue: number;
+    discount: number;
+    shipping: number;
+    netRevenue: number;
+    avgOrderValue: number;
+    unitsSold: number;
+  };
+  buckets: SalesReportBucket[];
+}
+
+export interface BestSellerRow {
+  productName: string;
+  unitsSold: number;
+  revenue: number;
+  orderCount: number;
+}
+
+export interface BestSellersReport {
+  from: string;
+  to: string;
+  items: BestSellerRow[];
+}
+
+export interface CustomerReportRow {
+  userId: string;
+  email: string;
+  name: string | null;
+  orderCount: number;
+  totalSpend: number;
+  avgOrderValue: number;
+  firstOrderAt: string;
+  lastOrderAt: string;
+}
+
+export interface CustomerReport {
+  from: string;
+  to: string;
+  totals: {
+    customersWithOrders: number;
+    newCustomers: number;
+    returningCustomers: number;
+    repeatRate: number;
+  };
+  items: CustomerReportRow[];
+}
+
+// --- Store settings & staff (Phase 7) ---
+
+export interface StoreSettingsView {
+  storeName: string;
+  supportEmail: string;
+  supportPhone: string | null;
+  addressLine: string | null;
+  currency: string;
+  freeShippingThreshold: number;
+  flatShippingFee: number;
+  taxRatePercent: number;
+  lowStockThreshold: number;
+  ordersEnabled: boolean;
+  maintenanceNotice: string | null;
+  updatedAt: string | null;
+}
+
+/** The storefront-visible subset — no operational thresholds. */
+export interface PublicStoreSettings {
+  storeName: string;
+  supportEmail: string;
+  supportPhone: string | null;
+  addressLine: string | null;
+  currency: string;
+  freeShippingThreshold: number;
+  flatShippingFee: number;
+  ordersEnabled: boolean;
+  maintenanceNotice: string | null;
+}
+
+/** Only STAFF and SUPER_ADMIN ever appear here — customers are managed elsewhere. */
+export type StaffRole = Extract<UserRole, 'STAFF' | 'SUPER_ADMIN'>;
+
+export interface StaffView {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  role: StaffRole;
+  isBlocked: boolean;
+  createdAt: string;
 }

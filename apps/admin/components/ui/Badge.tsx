@@ -3,8 +3,8 @@ import { ReactNode } from 'react';
 export type BadgeTone = 'success' | 'danger' | 'warning' | 'neutral' | 'muted' | 'accent';
 
 const toneClasses: Record<BadgeTone, string> = {
-  success: 'bg-success/15 text-success',
-  danger: 'bg-danger/15 text-danger',
+  success: 'bg-success/15 text-success-strong',
+  danger: 'bg-danger/15 text-danger-strong',
   warning: 'bg-warning text-warning-foreground',
   neutral: 'bg-surface text-text-secondary',
   muted: 'border border-muted-border text-text-secondary',

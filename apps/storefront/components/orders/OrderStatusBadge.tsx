@@ -2,12 +2,12 @@ import type { OrderStatus } from '@ecommerce/shared-types';
 
 const STATUS_STYLES: Record<OrderStatus, string> = {
   PENDING: 'bg-warning/20 text-text-strong',
-  CONFIRMED: 'bg-success/15 text-success',
+  CONFIRMED: 'bg-success/15 text-success-strong',
   PACKED: 'bg-accent/15 text-accent',
   SHIPPED: 'bg-accent/15 text-accent',
-  DELIVERED: 'bg-success/15 text-success',
-  CANCELLED: 'bg-danger/15 text-danger',
-  RETURNED: 'bg-danger/15 text-danger',
+  DELIVERED: 'bg-success/15 text-success-strong',
+  CANCELLED: 'bg-danger/15 text-danger-strong',
+  RETURNED: 'bg-danger/15 text-danger-strong',
 };
 
 const STATUS_LABELS: Record<OrderStatus, string> = {

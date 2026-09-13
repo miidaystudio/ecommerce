@@ -35,10 +35,10 @@ describe('Admin Management: dashboard, orders, inventory, customers (e2e)', () =
     prisma = app.get(PrismaService);
 
     await prisma.user.create({
-      data: { email: staffEmail, passwordHash: await bcrypt.hash(password, 12), role: Role.STAFF },
+      data: { email: staffEmail, passwordHash: await bcrypt.hash(password, 12), role: Role.STAFF, isVerified: true, emailVerifiedAt: new Date() },
     });
     const customer = await prisma.user.create({
-      data: { email: customerEmail, passwordHash: await bcrypt.hash(password, 12), role: Role.CUSTOMER },
+      data: { email: customerEmail, passwordHash: await bcrypt.hash(password, 12), role: Role.CUSTOMER, isVerified: true, emailVerifiedAt: new Date() },
     });
 
     const staffLogin = await request(app.getHttpServer())

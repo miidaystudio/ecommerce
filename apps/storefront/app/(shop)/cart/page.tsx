@@ -1,7 +1,12 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import type { PriceQuote } from '@ecommerce/shared-types';
+import { IncludedGst } from '../../../components/checkout/IncludedGst';
 import { Button } from '../../../components/ui/Button';
+import { cartApi } from '../../../lib/api/cart.api';
 import { resolveImageUrl } from '../../../lib/utils/image-url';
 import { formatPrice } from '../../../lib/utils/format-price';
 import { selectSubtotal, useCartStore } from '../../../store/cartStore';
@@ -14,6 +19,39 @@ export default function CartPage() {
   const removeItem = useCartStore((s) => s.removeItem);
   const subtotal = selectSubtotal(items);
   const hasUnavailableItems = items.some((item) => !item.available || item.stock === 0);
+
+  // Shipping and GST come from the API, priced from live variant prices; only
+  // variant ids and quantities are sent. Keyed on those so a quantity change
+  // re-quotes, debounced so stepping a quantity doesn't fire one call per click.
+  const [quote, setQuote] = useState<PriceQuote | null>(null);
+  const [quoteFailed, setQuoteFailed] = useState(false);
+  const lineKey = items.map((item) => `${item.variantId}:${item.quantity}`).join('|');
+
+  useEffect(() => {
+    if (items.length === 0) {
+      setQuote(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const result = await cartApi.quote(
+          items.map((item) => ({ variantId: item.variantId, quantity: item.quantity })),
+        );
+        if (!cancelled) {
+          setQuote(result);
+          setQuoteFailed(false);
+        }
+      } catch {
+        if (!cancelled) setQuoteFailed(true);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineKey]);
 
   if (items.length === 0) {
     return (
@@ -45,9 +83,12 @@ export default function CartPage() {
               <li key={item.variantId} className="flex gap-4 p-4">
                 <div className="h-24 w-20 flex-shrink-0 overflow-hidden rounded bg-surface">
                   {item.image ? (
-                    <img
+                    <Image
                       src={resolveImageUrl(item.image.url)}
                       alt={item.image.altText ?? item.product.name}
+                      width={80}
+                      height={96}
+                      sizes="80px"
                       className="h-full w-full object-cover"
                     />
                   ) : (
@@ -75,7 +116,7 @@ export default function CartPage() {
                   ) : null}
 
                   {unavailable ? (
-                    <span className="w-fit rounded-full bg-danger/15 px-2.5 py-0.5 font-mono text-2xs uppercase tracking-[0.1em] text-danger">
+                    <span className="w-fit rounded-full bg-danger/15 px-2.5 py-0.5 font-mono text-2xs uppercase tracking-[0.1em] text-danger-strong">
                       {item.stock === 0 ? 'Out of stock' : 'Unavailable'}
                     </span>
                   ) : null}
@@ -129,8 +170,28 @@ export default function CartPage() {
         <div className="h-fit rounded-lg border border-border bg-surface p-5 shadow-card">
           <div className="flex items-center justify-between text-sm">
             <span className="text-text-secondary">Subtotal</span>
-            <span className="font-semibold text-text-primary">{formatPrice(subtotal)}</span>
+            <span className="font-semibold text-text-primary">{formatPrice(quote?.subtotal ?? subtotal)}</span>
           </div>
+          {quote ? (
+            <>
+              <div className="mt-2 flex items-center justify-between text-sm">
+                <span className="text-text-secondary">Shipping</span>
+                <span className="text-text-primary">
+                  {quote.shippingFee === 0 ? 'Free' : formatPrice(quote.shippingFee)}
+                </span>
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-base font-semibold text-text-primary">
+                <span>Total</span>
+                <span>{formatPrice(quote.total)}</span>
+              </div>
+              <IncludedGst taxAmount={quote.taxIncluded} taxRatePercent={quote.taxRatePercent} className="mt-0.5" />
+              <p className="mt-1 text-2xs text-text-secondary">Discount codes can be applied at checkout.</p>
+            </>
+          ) : (
+            <p className="mt-1 text-2xs text-text-secondary">
+              {quoteFailed ? 'Shipping and GST are calculated at checkout.' : 'Calculating shipping and GST…'}
+            </p>
+          )}
           {hasUnavailableItems ? (
             <p className="mt-3 text-xs text-danger">
               Remove or resolve unavailable items before checking out.

@@ -18,7 +18,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { csvRowsToRecords, parseCsv } from '../../common/utils/csv';
-import { LocalImageStorageService } from '../upload/local-image-storage.service';
+import { CloudinaryStorageService } from '../upload/cloudinary-storage.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ListAdminProductsQueryDto } from './dto/list-admin-products-query.dto';
 import { ListProductsQueryDto } from './dto/list-products-query.dto';
@@ -39,7 +39,7 @@ const MAX_CSV_SIZE_BYTES = 2 * 1024 * 1024;
 export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
-    private readonly imageStorage: LocalImageStorageService,
+    private readonly imageStorage: CloudinaryStorageService,
   ) {}
 
   @Get('products')

@@ -1,4 +1,4 @@
-import type { CartResponse } from '@ecommerce/shared-types';
+import type { CartResponse, PriceQuote } from '@ecommerce/shared-types';
 import { apiFetch } from './client';
 
 export const cartApi = {
@@ -12,6 +12,11 @@ export const cartApi = {
 
   removeItem: (variantId: string): Promise<CartResponse> =>
     apiFetch<CartResponse>(`/cart/me/items/${variantId}`, { method: 'DELETE', auth: true }),
+
+  // Public, so it works for a guest's browser-only cart too. Only variant ids and
+  // quantities are sent; the API prices them from live data.
+  quote: (items: { variantId: string; quantity: number }[]): Promise<PriceQuote> =>
+    apiFetch<PriceQuote>('/cart/quote', { method: 'POST', body: { items } }),
 
   clear: (): Promise<{ success: true }> =>
     apiFetch<{ success: true }>('/cart/me', { method: 'DELETE', auth: true }),

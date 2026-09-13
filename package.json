@@ -13,7 +13,10 @@
     "dev:admin": "npm run dev --workspace @ecommerce/admin",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "seed:admin": "npm run seed:admin --workspace @ecommerce/api",
+    "docker:up": "powershell -ExecutionPolicy Bypass -File ./scripts/ensure-docker.ps1",
+    "migrate:images": "npm run migrate:images --workspace @ecommerce/api"
   },
   "engines": {
     "node": ">=20"

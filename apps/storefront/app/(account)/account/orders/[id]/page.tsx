@@ -1,9 +1,11 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { OrderDetail } from '@ecommerce/shared-types';
+import { IncludedGst } from '../../../../../components/checkout/IncludedGst';
 import { Button } from '../../../../../components/ui/Button';
 import { OrderStatusBadge } from '../../../../../components/orders/OrderStatusBadge';
 import { ApiError } from '../../../../../lib/api/client';
@@ -162,8 +164,14 @@ export default function OrderDetailPage() {
             <li key={item.id} className="flex gap-4">
               <div className="h-16 w-14 flex-shrink-0 overflow-hidden rounded bg-surface">
                 {item.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={resolveImageUrl(item.imageUrl)} alt={item.productName} className="h-full w-full object-cover" />
+                  <Image
+                    src={resolveImageUrl(item.imageUrl)}
+                    alt={item.productName}
+                    width={56}
+                    height={64}
+                    sizes="56px"
+                    className="h-full w-full object-cover"
+                  />
                 ) : null}
               </div>
               <div className="flex-1">
@@ -182,6 +190,12 @@ export default function OrderDetailPage() {
             <span>Subtotal</span>
             <span>{formatPrice(order.subtotal)}</span>
           </div>
+          {order.discount > 0 ? (
+            <div className="flex justify-between text-success">
+              <span>Discount{order.couponCode ? ` (${order.couponCode})` : ''}</span>
+              <span>−{formatPrice(order.discount)}</span>
+            </div>
+          ) : null}
           <div className="flex justify-between text-text-secondary">
             <span>Shipping</span>
             <span>{order.shippingFee === 0 ? 'Free' : formatPrice(order.shippingFee)}</span>
@@ -190,6 +204,7 @@ export default function OrderDetailPage() {
             <span>Total</span>
             <span>{formatPrice(order.total)}</span>
           </div>
+          <IncludedGst taxAmount={order.taxAmount} taxRatePercent={order.taxRatePercent} />
         </div>
       </div>
 

@@ -1,4 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Put, Query, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { SENSITIVE_THROTTLE } from '../../config/throttle.config';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.type';
@@ -33,6 +35,7 @@ export class ReviewsController {
   }
 
   @Put('mine')
+  @Throttle(SENSITIVE_THROTTLE)
   @UseGuards(JwtAuthGuard)
   upsertMine(
     @CurrentUser() user: AuthenticatedUser,

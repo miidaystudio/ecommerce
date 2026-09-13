@@ -1,10 +1,13 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import type { PaymentMethod, UserAddress } from '@ecommerce/shared-types';
+import type { AppliedCoupon, OrderQuote, PaymentMethod, UserAddress } from '@ecommerce/shared-types';
 import { AddressForm } from '../../../components/checkout/AddressForm';
+import { CouponField } from '../../../components/checkout/CouponField';
+import { IncludedGst } from '../../../components/checkout/IncludedGst';
 import { Button } from '../../../components/ui/Button';
 import { addressesApi } from '../../../lib/api/addresses.api';
 import { ApiError } from '../../../lib/api/client';
@@ -29,9 +32,45 @@ export default function CheckoutPage() {
   const [showAddForm, setShowAddForm] = useState(false);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('RAZORPAY');
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState<string[]>([]);
   const [paymentNotice, setPaymentNotice] = useState('');
+
+  // A previewed discount is only valid for the subtotal it was computed against,
+  // so drop it if the cart value shifts. (The API re-validates regardless.)
+  useEffect(() => {
+    setAppliedCoupon(null);
+  }, [subtotal]);
+
+  // The order summary comes from the same server pricing that will create the
+  // order — cart at live prices, coupon re-validated, shipping and GST from store
+  // settings — so what is shown here is what gets charged.
+  const [quote, setQuote] = useState<OrderQuote | null>(null);
+  const [quoteError, setQuoteError] = useState('');
+  const lineKey = items.map((item) => `${item.variantId}:${item.quantity}`).join('|');
+
+  useEffect(() => {
+    if (status !== 'authenticated' || items.length === 0) return;
+    let cancelled = false;
+    setQuoteError('');
+    ordersApi
+      .quote(appliedCoupon?.code)
+      .then((result) => {
+        if (!cancelled) setQuote(result);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setQuote(null);
+        setQuoteError(err instanceof ApiError ? err.message : 'Could not calculate your order total.');
+        // A coupon that no longer validates must not stay "applied" in the UI.
+        if (appliedCoupon) setAppliedCoupon(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, lineKey, appliedCoupon?.code]);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -87,7 +126,7 @@ export default function CheckoutPage() {
     setPlacing(true);
 
     try {
-      const result = await ordersApi.create(selectedAddressId, paymentMethod);
+      const result = await ordersApi.create(selectedAddressId, paymentMethod, appliedCoupon?.code);
 
       if (!result.razorpay) {
         // COD — already CONFIRMED server-side.
@@ -167,8 +206,8 @@ export default function CheckoutPage() {
       ) : null}
       {error.length > 0 ? (
         <div className="mb-6 rounded-lg border border-danger/30 bg-danger/10 p-4">
-          <p className="text-sm font-medium text-danger">Some items in your cart need attention:</p>
-          <ul className="mt-1 list-inside list-disc text-sm text-danger">
+          <p className="text-sm font-medium text-danger-strong">Some items in your cart need attention:</p>
+          <ul className="mt-1 list-inside list-disc text-sm text-danger-strong">
             {error.map((message) => (
               <li key={message}>{message}</li>
             ))}
@@ -289,10 +328,12 @@ export default function CheckoutPage() {
               <li key={item.variantId} className="flex gap-3">
                 <div className="h-14 w-12 flex-shrink-0 overflow-hidden rounded bg-background">
                   {item.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={resolveImageUrl(item.image.url)}
                       alt={item.image.altText ?? item.product.name}
+                      width={48}
+                      height={56}
+                      sizes="48px"
                       className="h-full w-full object-cover"
                     />
                   ) : null}
@@ -306,11 +347,35 @@ export default function CheckoutPage() {
             ))}
           </ul>
 
+          <CouponField applied={appliedCoupon} onApplied={setAppliedCoupon} disabled={placing} />
+
           <div className="mt-4 flex items-center justify-between border-t border-border pt-4 text-sm">
             <span className="text-text-secondary">Subtotal</span>
-            <span className="font-semibold text-text-primary">{formatPrice(subtotal)}</span>
+            <span className="font-semibold text-text-primary">{formatPrice(quote?.subtotal ?? subtotal)}</span>
           </div>
-          <p className="mt-1 text-2xs text-text-secondary">Shipping and final total shown on payment.</p>
+          {quote && quote.discount > 0 ? (
+            <div className="mt-2 flex items-center justify-between text-sm">
+              <span className="text-text-secondary">Discount{quote.couponCode ? ` (${quote.couponCode})` : ''}</span>
+              <span className="font-semibold text-success">−{formatPrice(quote.discount)}</span>
+            </div>
+          ) : null}
+          {quote ? (
+            <>
+              <div className="mt-2 flex items-center justify-between text-sm">
+                <span className="text-text-secondary">Shipping</span>
+                <span className="text-text-primary">
+                  {quote.shippingFee === 0 ? 'Free' : formatPrice(quote.shippingFee)}
+                </span>
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-base font-semibold text-text-primary">
+                <span>Total</span>
+                <span>{formatPrice(quote.total)}</span>
+              </div>
+              <IncludedGst taxAmount={quote.taxIncluded} taxRatePercent={quote.taxRatePercent} className="mt-0.5" />
+            </>
+          ) : (
+            <p className="mt-1 text-2xs text-text-secondary">{quoteError || 'Calculating your total…'}</p>
+          )}
 
           <Button onClick={handlePlaceOrder} disabled={placing || !selectedAddressId} className="mt-5 w-full">
             {placing ? 'Placing order…' : 'Place order'}

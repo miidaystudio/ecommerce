@@ -17,25 +17,48 @@ enum Role {
 }
 
 model User {
-  id            String         @id @default(uuid())
-  email         String         @unique
-  passwordHash  String
-  firstName     String?
-  lastName      String?
-  phone         String?
-  role          Role           @default(CUSTOMER)
-  isBlocked     Boolean        @default(false)
-  addresses     Address[]
-  refreshTokens RefreshToken[]
-  cartItems     CartItem[]
-  wishlistItems WishlistItem[]
-  orders        Order[]
-  reviews       Review[]
+  id                String             @id @default(uuid())
+  email             String             @unique
+  passwordHash      String
+  firstName         String?
+  lastName          String?
+  phone             String?
+  phoneNumber       String?
+  role              Role               @default(CUSTOMER)
+  isBlocked         Boolean            @default(false)
+  isVerified        Boolean            @default(false)
+  emailVerifiedAt   DateTime?
+  mustChangePassword Boolean           @default(false)
+  addresses         Address[]
+  refreshTokens     RefreshToken[]
+  otpVerifications  OtpVerification[]
+  cartItems         CartItem[]
+  wishlistItems     WishlistItem[]
+  orders            Order[]
+  reviews           Review[]
   couponRedemptions CouponRedemption[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   @@map("users")
+}
+
+model OtpVerification {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  otpHash           String
+  expiresAt         DateTime
+  attempts          Int       @default(0)
+  maxAttempts       Int       @default(5)
+  resendAvailableAt DateTime
+  consumedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([userId, expiresAt])
+  @@map("otp_verifications")
 }
 
 model Address {
@@ -109,33 +132,33 @@ model Category {
 }
 
 model Product {
-  id              String          @id @default(uuid())
-  name            String
-  slug            String          @unique
-  description     String
-  status          ProductStatus   @default(DRAFT)
-  categoryId      String
-  category        Category        @relation(fields: [categoryId], references: [id])
-  brandId         String?
-  brand           Brand?          @relation(fields: [brandId], references: [id])
-  seoTitle        String?
-  seoDescription  String?
-  images          ProductImage[]
-  variants        ProductVariant[]
-  wishlistedBy    WishlistItem[]
-  reviews         Review[]
+  id                    String           @id @default(uuid())
+  name                  String
+  slug                  String           @unique
+  description           String
+  status                ProductStatus    @default(DRAFT)
+  categoryId            String
+  category              Category         @relation(fields: [categoryId], references: [id])
+  brandId               String?
+  brand                 Brand?           @relation(fields: [brandId], references: [id])
+  seoTitle              String?
+  seoDescription        String?
+  images                ProductImage[]
+  variants              ProductVariant[]
+  wishlistedBy          WishlistItem[]
+  reviews               Review[]
   // Denormalized from APPROVED reviews (recomputed on every moderation change)
   // so listing/sorting by rating stays a single indexed query — same rationale
   // as the displayPrice/inStock fields below.
-  ratingAverage   Decimal  @db.Decimal(3, 2) @default(0)
-  ratingCount     Int      @default(0)
+  ratingAverage         Decimal          @default(0) @db.Decimal(3, 2)
+  ratingCount           Int              @default(0)
   // Denormalized from variants (recomputed server-side on every variant write) so
   // listing/filtering/sorting stays a single indexed query instead of an aggregate join.
-  displayPrice           Decimal  @db.Decimal(10, 2) @default(0)
-  displayCompareAtPrice  Decimal? @db.Decimal(10, 2)
-  inStock                Boolean  @default(false)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  displayPrice          Decimal          @default(0) @db.Decimal(10, 2)
+  displayCompareAtPrice Decimal?         @db.Decimal(10, 2)
+  inStock               Boolean          @default(false)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
 
   @@index([categoryId])
   @@index([brandId])
@@ -158,21 +181,21 @@ model ProductImage {
 }
 
 model ProductVariant {
-  id              String   @id @default(uuid())
-  productId       String
-  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  sku             String   @unique
-  name            String
-  attributes      Json?
-  price           Decimal  @db.Decimal(10, 2)
-  compareAtPrice  Decimal? @db.Decimal(10, 2)
-  stock           Int      @default(0)
-  isDefault       Boolean  @default(false)
-  cartItems       CartItem[]
-  orderItems      OrderItem[]
+  id                   String                @id @default(uuid())
+  productId            String
+  product              Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku                  String                @unique
+  name                 String
+  attributes           Json?
+  price                Decimal               @db.Decimal(10, 2)
+  compareAtPrice       Decimal?              @db.Decimal(10, 2)
+  stock                Int                   @default(0)
+  isDefault            Boolean               @default(false)
+  cartItems            CartItem[]
+  orderItems           OrderItem[]
   inventoryAdjustments InventoryAdjustment[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
   @@index([productId])
   @@map("product_variants")
@@ -257,20 +280,26 @@ model Order {
   shippingPostalCode String
   shippingCountry    String
 
-  subtotal    Decimal       @db.Decimal(10, 2)
-  shippingFee Decimal       @db.Decimal(10, 2) @default(0)
+  subtotal      Decimal       @db.Decimal(10, 2)
+  shippingFee   Decimal       @default(0) @db.Decimal(10, 2)
   // Discount is recomputed server-side from the coupon at order time and the
   // code snapshotted here — an order's discount never changes if the coupon is
   // later edited or deleted.
-  discount       Decimal  @db.Decimal(10, 2) @default(0)
-  couponCode     String?
-  couponId       String?
-  coupon         Coupon?  @relation(fields: [couponId], references: [id], onDelete: SetNull)
-  total       Decimal       @db.Decimal(10, 2)
+  discount      Decimal       @default(0) @db.Decimal(10, 2)
+  couponCode    String?
+  couponId      String?
+  coupon        Coupon?       @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  total         Decimal       @db.Decimal(10, 2)
+  // Prices are tax-inclusive: taxAmount is the GST already contained in total,
+  // never added to it. Snapshotted with the rate in force at order time, so a
+  // later change to the store's tax rate can't rewrite a past invoice.
+  // Orders placed before this existed default to 0 and show no GST line.
+  taxRatePercent Decimal      @default(0) @db.Decimal(5, 2)
+  taxAmount      Decimal      @default(0) @db.Decimal(10, 2)
   paymentMethod PaymentMethod
 
-  items   OrderItem[]
-  payment Payment?
+  items            OrderItem[]
+  payment          Payment?
   couponRedemption CouponRedemption?
 
   createdAt DateTime @default(now())
@@ -326,14 +355,14 @@ model Payment {
 }
 
 model InventoryAdjustment {
-  id        String                     @id @default(uuid())
+  id        String                    @id @default(uuid())
   variantId String
-  variant   ProductVariant             @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  variant   ProductVariant            @relation(fields: [variantId], references: [id], onDelete: Cascade)
   change    Int
   reason    InventoryAdjustmentReason
   orderId   String?
   note      String?
-  createdAt DateTime                   @default(now())
+  createdAt DateTime                  @default(now())
 
   @@index([variantId])
   @@map("inventory_adjustments")
@@ -345,24 +374,24 @@ enum DiscountType {
 }
 
 model Coupon {
-  id           String       @id @default(uuid())
-  code         String       @unique
-  description  String?
-  discountType DiscountType
+  id            String       @id @default(uuid())
+  code          String       @unique
+  description   String?
+  discountType  DiscountType
   // For PERCENTAGE this is 1-100; for FIXED it's a currency amount. Both are
   // validated > 0 at write time; the resulting discount is always clamped to
   // never exceed the cart subtotal (no negative-total orders).
-  discountValue Decimal     @db.Decimal(10, 2)
+  discountValue Decimal      @db.Decimal(10, 2)
   // Optional cap on a percentage discount, e.g. "20% off, up to ₹500".
-  maxDiscount   Decimal?    @db.Decimal(10, 2)
-  minOrderValue Decimal?    @db.Decimal(10, 2)
+  maxDiscount   Decimal?     @db.Decimal(10, 2)
+  minOrderValue Decimal?     @db.Decimal(10, 2)
   // Null = unlimited. usedCount is incremented inside the order transaction.
-  usageLimit      Int?
-  perUserLimit    Int?
-  usedCount       Int       @default(0)
-  isActive        Boolean   @default(true)
-  startsAt        DateTime?
-  expiresAt       DateTime?
+  usageLimit    Int?
+  perUserLimit  Int?
+  usedCount     Int          @default(0)
+  isActive      Boolean      @default(true)
+  startsAt      DateTime?
+  expiresAt     DateTime?
 
   orders      Order[]
   redemptions CouponRedemption[]
@@ -399,17 +428,17 @@ enum ReviewStatus {
 }
 
 model Review {
-  id        String       @id @default(uuid())
-  productId String
-  product   Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rating    Int
-  title     String?
-  body      String
-  status    ReviewStatus @default(PENDING)
+  id                 String       @id @default(uuid())
+  productId          String
+  product            Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating             Int
+  title              String?
+  body               String
+  status             ReviewStatus @default(PENDING)
   // Set when the reviewer has a delivered order containing this product.
-  isVerifiedPurchase Boolean @default(false)
+  isVerifiedPurchase Boolean      @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -433,4 +462,42 @@ model Banner {
 
   @@index([isActive, position])
   @@map("banners")
+}
+
+// Store-wide configuration the client can edit without a developer (prd.md:
+// "full self-service control ... without needing a developer"). A single typed
+// row rather than a key/value table, so every setting keeps a real type and a
+// default instead of being stringly-typed everywhere it is read.
+//
+// Shipping and low-stock values lived in environment variables through Phases
+// 4-6; this is the Phase 7 home phase.md deferred them to. The env values
+// remain the fallback used when no row exists yet.
+model StoreSetting {
+  // Enforced as a singleton by a fixed primary key — there is exactly one store.
+  id String @id @default("default")
+
+  storeName    String  @default("miiday")
+  supportEmail String  @default("support@miiday.test")
+  supportPhone String?
+  // Free-text, shown on the storefront's info pages.
+  addressLine  String?
+
+  currency String @default("INR")
+
+  // Money thresholds, mirroring the env values they replace.
+  freeShippingThreshold Decimal @default(999) @db.Decimal(10, 2)
+  flatShippingFee       Decimal @default(79) @db.Decimal(10, 2)
+  // Percentage applied at display time only; order totals are unchanged by it
+  // until tax is actually part of the checkout calculation.
+  taxRatePercent        Decimal @default(0) @db.Decimal(5, 2)
+
+  lowStockThreshold Int @default(5)
+
+  // Closes the storefront's checkout without taking the whole site down.
+  ordersEnabled     Boolean @default(true)
+  maintenanceNotice String?
+
+  updatedAt DateTime @updatedAt
+
+  @@map("store_settings")
 }

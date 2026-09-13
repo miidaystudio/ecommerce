@@ -15,13 +15,16 @@ export default function LoginPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [lastEmail, setLastEmail] = useState('');
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError('');
     const form = new FormData(event.currentTarget);
+    const emailVal = (form.get('email') as string) || '';
+    setLastEmail(emailVal);
     const parsed = loginSchema.safeParse({
-      email: form.get('email'),
+      email: emailVal,
       password: form.get('password'),
     });
 
@@ -86,7 +89,19 @@ export default function LoginPage() {
               autoComplete="current-password"
               error={fieldErrors.password}
             />
-            {formError ? <p className="text-sm text-danger">{formError}</p> : null}
+            {formError ? (
+              <div className="flex flex-col gap-1 text-sm text-danger">
+                <p>{formError}</p>
+                {formError.toLowerCase().includes('verif') ? (
+                  <Link
+                    href={`/register?step=otp${lastEmail ? `&email=${encodeURIComponent(lastEmail)}` : ''}`}
+                    className="font-medium underline hover:text-danger-strong"
+                  >
+                    Enter verification code
+                  </Link>
+                ) : null}
+              </div>
+            ) : null}
             <Button type="submit" disabled={submitting} className="mt-1 w-full">
               {submitting ? 'Signing in…' : 'Sign in'}
             </Button>

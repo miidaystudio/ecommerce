@@ -76,10 +76,10 @@ describe('Orders & Payments (e2e)', () => {
     prisma = app.get(PrismaService);
 
     await prisma.user.create({
-      data: { email: customerAEmail, passwordHash: await bcrypt.hash(password, 12), role: Role.CUSTOMER },
+      data: { email: customerAEmail, passwordHash: await bcrypt.hash(password, 12), role: Role.CUSTOMER, isVerified: true, emailVerifiedAt: new Date() },
     });
     await prisma.user.create({
-      data: { email: customerBEmail, passwordHash: await bcrypt.hash(password, 12), role: Role.CUSTOMER },
+      data: { email: customerBEmail, passwordHash: await bcrypt.hash(password, 12), role: Role.CUSTOMER, isVerified: true, emailVerifiedAt: new Date() },
     });
 
     const loginA = await request(app.getHttpServer())

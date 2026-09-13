@@ -56,14 +56,14 @@ describe('Marketing: coupons, reviews, banners (e2e)', () => {
     prisma = app.get(PrismaService);
 
     await prisma.user.create({
-      data: { email: staffEmail, passwordHash: await bcrypt.hash(password, 12), role: Role.STAFF },
+      data: { email: staffEmail, passwordHash: await bcrypt.hash(password, 12), role: Role.STAFF, isVerified: true, emailVerifiedAt: new Date() },
     });
     const customer = await prisma.user.create({
-      data: { email: customerEmail, passwordHash: await bcrypt.hash(password, 12), role: Role.CUSTOMER, firstName: 'Cust' },
+      data: { email: customerEmail, passwordHash: await bcrypt.hash(password, 12), role: Role.CUSTOMER, firstName: 'Cust', isVerified: true, emailVerifiedAt: new Date() },
     });
     customerId = customer.id;
     await prisma.user.create({
-      data: { email: customerBEmail, passwordHash: await bcrypt.hash(password, 12), role: Role.CUSTOMER },
+      data: { email: customerBEmail, passwordHash: await bcrypt.hash(password, 12), role: Role.CUSTOMER, isVerified: true, emailVerifiedAt: new Date() },
     });
 
     staffToken = (
@@ -274,6 +274,29 @@ describe('Marketing: coupons, reviews, banners (e2e)', () => {
       expect(res.body.order.total).toBeGreaterThanOrEqual(0);
     });
 
+    // Razorpay refuses amounts under ₹1, so a fully-discounted order must not be
+    // handed to the gateway — it would leave a PENDING order that can never be paid.
+    it('settles a fully-discounted RAZORPAY order server-side instead of creating an unpayable one', async () => {
+      await createCoupon({ code: `ALLOFF${stamp}`, discountType: 'PERCENTAGE', discountValue: 100 });
+      await addToCart(customerToken, 1); // subtotal 1000, over the free-shipping threshold
+
+      const res = await request(app.getHttpServer())
+        .post('/api/orders/me')
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({ addressId, paymentMethod: 'RAZORPAY', couponCode: `ALLOFF${stamp}` })
+        .expect(201);
+
+      expect(res.body.order.total).toBe(0);
+      expect(res.body.razorpay).toBeNull();
+      expect(res.body.order.status).toBe('CONFIRMED');
+
+      // Nothing is owed, so retrying payment is refused rather than passed on.
+      await request(app.getHttpServer())
+        .post(`/api/orders/me/${res.body.order.id}/retry-payment`)
+        .set('Authorization', `Bearer ${customerToken}`)
+        .expect(400);
+    });
+
     it('enforces the per-user limit across separate orders, but not across different users', async () => {
       await createCoupon({ code: `ONCE${stamp}`, discountType: 'FIXED', discountValue: 50, perUserLimit: 1 });
 
@@ -480,6 +503,54 @@ describe('Marketing: coupons, reviews, banners (e2e)', () => {
       const titles = publicList.body.map((b: { title: string }) => b.title);
       expect(titles).toContain(`Active ${stamp}`);
       expect(titles).not.toContain(`Hidden ${stamp}`);
+    });
+
+    // Banner URLs are rendered into an href/src on the public storefront, so a
+    // script-bearing URL stored by staff would be XSS against every visitor.
+    it.each([
+      ['javascript:alert(1)', 'linkUrl'],
+      ['javascript:alert(1)', 'imageUrl'],
+      ['data:text/html,<script>alert(1)</script>', 'imageUrl'],
+      ['//evil.example.com/x', 'linkUrl'],
+      ['vbscript:msgbox(1)', 'linkUrl'],
+    ])('refuses %p as a banner %s', async (url, field) => {
+      await request(app.getHttpServer())
+        .post('/api/admin/banners')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({ title: `Probe ${stamp}`, [field]: url })
+        .expect(400);
+    });
+
+    it('accepts a relative path and an absolute https URL', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/api/admin/banners')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({
+          title: `Safe urls ${stamp}`,
+          linkUrl: '/products?category=x',
+          imageUrl: 'https://cdn.example.com/a.png',
+          isActive: false,
+        })
+        .expect(201);
+      createdBannerIds.push(created.body.id);
+
+      expect(created.body.linkUrl).toBe('/products?category=x');
+      expect(created.body.imageUrl).toBe('https://cdn.example.com/a.png');
+    });
+
+    it('refuses an unsafe URL on update too, not just on create', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/api/admin/banners')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({ title: `Update probe ${stamp}`, isActive: false })
+        .expect(201);
+      createdBannerIds.push(created.body.id);
+
+      await request(app.getHttpServer())
+        .patch(`/api/admin/banners/${created.body.id}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({ linkUrl: 'javascript:alert(1)' })
+        .expect(400);
     });
   });
 

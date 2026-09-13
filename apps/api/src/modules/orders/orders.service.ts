@@ -1,10 +1,10 @@
 import { randomBytes } from 'crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InventoryAdjustmentReason, OrderStatus, PaymentMethod, PaymentStatus, Prisma, ProductStatus } from '@prisma/client';
 import { EmailService } from '../../common/email/email.service';
 import { PrismaService } from '../../database/prisma.service';
-import { CouponsService } from '../coupons/coupons.service';
+import { AppliedCoupon as AppliedCouponResult, CouponsService } from '../coupons/coupons.service';
+import { PriceSummary, SettingsService } from '../settings/settings.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { PaymentsService } from '../payments/payments.service';
 import { RazorpayService } from '../payments/razorpay.service';
@@ -64,8 +64,15 @@ export interface OrderDetail {
   discount: number;
   couponCode: string | null;
   total: number;
+  /** GST contained in total (prices are tax-inclusive); 0 for orders placed before this was tracked. */
+  taxAmount: number;
+  taxRatePercent: number;
   items: OrderItemView[];
   createdAt: string;
+}
+
+export interface OrderQuote extends PriceSummary {
+  couponCode: string | null;
 }
 
 export interface CreateOrderResponse {
@@ -127,11 +134,20 @@ export class OrdersService {
     private readonly paymentsService: PaymentsService,
     private readonly inventory: InventoryService,
     private readonly email: EmailService,
-    private readonly config: ConfigService,
     private readonly coupons: CouponsService,
+    private readonly settings: SettingsService,
   ) {}
 
   async create(userId: string, dto: CreateOrderDto): Promise<CreateOrderResponse> {
+    // Store-wide kill switch, checked server-side before anything is reserved
+    // or charged — hiding the checkout button in the UI is not a control.
+    const storeSettings = await this.settings.get();
+    if (!storeSettings.ordersEnabled) {
+      throw new BadRequestException(
+        storeSettings.maintenanceNotice ?? 'The store is not accepting orders right now',
+      );
+    }
+
     const address = await this.prisma.address.findUnique({ where: { id: dto.addressId } });
     if (!address || address.userId !== userId) {
       throw new NotFoundException('Address not found');
@@ -162,24 +178,20 @@ export class OrdersService {
       throw new BadRequestException(problems);
     }
 
-    const subtotal = cartItems.reduce((sum, item) => sum + Number(item.variant.price) * item.quantity, 0);
-    const shippingFee = this.computeShippingFee(subtotal);
-
-    // Re-validated from scratch here even if the client already previewed it —
-    // the preview grants nothing, and the discount is computed from the live
-    // cart subtotal, never from any amount the client sent.
-    const appliedCoupon = dto.couponCode
-      ? await this.coupons.validateForUser(dto.couponCode, userId, subtotal)
-      : null;
-    const discount = appliedCoupon?.discount ?? 0;
-
-    const total = Math.max(0, subtotal - discount) + shippingFee;
+    const { appliedCoupon, summary } = await this.priceCart(userId, cartItems, dto.couponCode);
+    const { subtotal, discount, shippingFee, total } = summary;
     const orderNumber = await this.generateOrderNumber();
 
     const couponFields = {
       discount,
       couponCode: appliedCoupon?.code ?? null,
       couponId: appliedCoupon?.couponId ?? null,
+    };
+
+    // GST contained in the tax-inclusive total, frozen with the rate in force now.
+    const taxFields = {
+      taxRatePercent: summary.taxRatePercent,
+      taxAmount: summary.taxIncluded,
     };
 
     const itemsData = cartItems.map((item) => ({
@@ -204,7 +216,13 @@ export class OrdersService {
       shippingCountry: address.country,
     };
 
-    if (dto.paymentMethod === PaymentMethod.COD) {
+    // A fully-discounted order has nothing to charge: Razorpay rejects a
+    // zero amount, which would otherwise leave a PENDING order that could
+    // never be paid or retried. The server decides this from its own computed
+    // total — not from anything the client claimed — so it settles here
+    // instead, on the same path COD uses.
+    const nothingToCharge = total === 0;
+    if (dto.paymentMethod === PaymentMethod.COD || nothingToCharge) {
       const order = await this.prisma.$transaction(async (tx) => {
         const created = await tx.order.create({
           data: {
@@ -215,10 +233,18 @@ export class OrdersService {
             subtotal,
             shippingFee,
             ...couponFields,
+            ...taxFields,
             total,
-            paymentMethod: PaymentMethod.COD,
+            paymentMethod: dto.paymentMethod,
             items: { create: itemsData },
-            payment: { create: { method: PaymentMethod.COD, status: PaymentStatus.PENDING, amount: total } },
+            payment: {
+              create: {
+                method: dto.paymentMethod,
+                // Nothing is owed, so the payment is settled rather than pending.
+                status: nothingToCharge ? PaymentStatus.PAID : PaymentStatus.PENDING,
+                amount: total,
+              },
+            },
           },
           include: ORDER_DETAIL_INCLUDE,
         });
@@ -250,6 +276,7 @@ export class OrdersService {
         subtotal,
         shippingFee,
         ...couponFields,
+        ...taxFields,
         total,
         paymentMethod: PaymentMethod.RAZORPAY,
         items: { create: itemsData },
@@ -271,6 +298,41 @@ export class OrdersService {
     };
   }
 
+  /**
+   * Checkout's order summary, computed exactly as create() will compute it:
+   * the caller's server-side cart at live prices, the coupon re-validated for
+   * this user, then shipping and tax-inclusive GST from store settings.
+   * Nothing the client sends is used except the coupon *code*.
+   */
+  async quote(userId: string, couponCode?: string): Promise<OrderQuote> {
+    const cartItems = await this.prisma.cartItem.findMany({
+      where: { userId, variant: { product: { status: ProductStatus.ACTIVE } } },
+      include: { variant: true },
+    });
+    const { appliedCoupon, summary } = await this.priceCart(userId, cartItems, couponCode);
+    return { ...summary, couponCode: appliedCoupon?.code ?? null };
+  }
+
+  /**
+   * Shared by create() and quote() so the summary a customer sees before
+   * paying and the amount actually charged cannot diverge.
+   */
+  private async priceCart(
+    userId: string,
+    cartItems: { quantity: number; variant: { price: Prisma.Decimal | number } }[],
+    couponCode?: string,
+  ): Promise<{ appliedCoupon: AppliedCouponResult | null; summary: PriceSummary }> {
+    const subtotal = cartItems.reduce((sum, item) => sum + Number(item.variant.price) * item.quantity, 0);
+
+    // Re-validated from scratch here even if the client already previewed it —
+    // the preview grants nothing, and the discount is computed from the live
+    // cart subtotal, never from any amount the client sent.
+    const appliedCoupon = couponCode ? await this.coupons.validateForUser(couponCode, userId, subtotal) : null;
+
+    const summary = await this.settings.summarize(subtotal, appliedCoupon?.discount ?? 0);
+    return { appliedCoupon, summary };
+  }
+
   async retryPayment(userId: string, orderId: string): Promise<CreateOrderResponse> {
     const order = await this.prisma.order.findUnique({ where: { id: orderId }, include: ORDER_DETAIL_INCLUDE });
     if (!order || order.userId !== userId) {
@@ -278,6 +340,11 @@ export class OrdersService {
     }
     if (order.paymentMethod !== PaymentMethod.RAZORPAY || order.status !== OrderStatus.PENDING) {
       throw new BadRequestException('This order is not awaiting payment');
+    }
+    // Razorpay rejects a zero amount; such orders are settled at creation and
+    // should never reach here. Fail with a clear message rather than a gateway error.
+    if (Number(order.total) <= 0) {
+      throw new BadRequestException('This order has nothing left to pay');
     }
 
     const razorpayOrder = await this.createRazorpayOrderFor(order.id, Number(order.total), order.orderNumber);
@@ -485,12 +552,6 @@ export class OrdersService {
     return razorpayOrder;
   }
 
-  private computeShippingFee(subtotal: number): number {
-    const threshold = this.config.get<number>('payments.freeShippingThreshold') ?? 999;
-    const flatFee = this.config.get<number>('payments.flatShippingFee') ?? 79;
-    return subtotal >= threshold ? 0 : flatFee;
-  }
-
   private async generateOrderNumber(): Promise<string> {
     const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -510,7 +571,7 @@ export class OrdersService {
     await this.email.send({
       to: user.email,
       subject: `Order confirmed — ${order.orderNumber}`,
-      body: `Hi ${user.firstName ?? 'there'},\n\nYour order ${order.orderNumber} is confirmed. Total: ₹${order.total}.\n\nThanks for shopping with miiday.`,
+      body: `Hi ${user.firstName ?? 'there'},\n\nYour order ${order.orderNumber} is confirmed. Total: ₹${order.total}${Number(order.taxAmount) > 0 ? ` (incl. ₹${order.taxAmount} GST)` : ''}.\n\nThanks for shopping with miiday.`,
     });
   }
 
@@ -559,6 +620,8 @@ export class OrdersService {
       discount: Number(order.discount),
       couponCode: order.couponCode,
       total: Number(order.total),
+      taxAmount: Number(order.taxAmount),
+      taxRatePercent: Number(order.taxRatePercent),
       items: order.items.map((item) => ({
         id: item.id,
         productName: item.productName,

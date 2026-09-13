@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { PriceSummary, SettingsService } from '../settings/settings.service';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 
@@ -40,7 +41,40 @@ export interface CartResponse {
 
 @Injectable()
 export class CartService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+  ) {}
+
+  /**
+   * Prices a set of lines for display — the cart page's subtotal, shipping and
+   * tax-inclusive GST — through the same SettingsService.summarize() that
+   * order creation uses.
+   *
+   * Lines for unknown variants or non-ACTIVE products are left out rather than
+   * failing the whole quote; checkout re-validates every line for real before
+   * anything is charged.
+   */
+  async quote(lines: { variantId: string; quantity: number }[]): Promise<PriceSummary> {
+    // Repeated variant ids are merged, so a duplicated line can't be priced twice.
+    const quantities = new Map<string, number>();
+    for (const line of lines) {
+      quantities.set(line.variantId, (quantities.get(line.variantId) ?? 0) + line.quantity);
+    }
+
+    const variants = quantities.size
+      ? await this.prisma.productVariant.findMany({
+          where: { id: { in: [...quantities.keys()] }, product: { status: ProductStatus.ACTIVE } },
+          select: { id: true, price: true },
+        })
+      : [];
+
+    const subtotal = variants.reduce(
+      (sum, variant) => sum + Number(variant.price) * (quantities.get(variant.id) ?? 0),
+      0,
+    );
+    return this.settings.summarize(Math.round(subtotal * 100) / 100, 0);
+  }
 
   async getCart(userId: string): Promise<CartResponse> {
     const items = await this.prisma.cartItem.findMany({

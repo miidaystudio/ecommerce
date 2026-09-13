@@ -24,8 +24,17 @@ const config: Config = {
           soft: '#D6B370',
           foreground: '#FAF9F6',
         },
-        success: '#7C9885',
-        danger: '#C17767',
+        // WCAG AA (2026-09-13): success/danger/text-secondary darkened to pass 4.5:1;
+        // `strong` is for text on a success/danger tint (badges, alert panels),
+        // where the base shade alone falls just under 4.5:1. See design.md.
+        success: {
+          DEFAULT: '#5D7264',
+          strong: '#536559',
+        },
+        danger: {
+          DEFAULT: '#985E51',
+          strong: '#875448',
+        },
         warning: {
           DEFAULT: '#D6B370',
           foreground: '#35302A',
@@ -36,7 +45,7 @@ const config: Config = {
         'muted-border': '#C0BAB0',
         text: {
           primary: '#2E2A24',
-          secondary: '#7A756B',
+          secondary: '#716D64',
           strong: '#35302A',
         },
         admin: {

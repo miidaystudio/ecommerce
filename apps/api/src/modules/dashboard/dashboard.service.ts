@@ -1,17 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
+import { committedOrderWhere } from '../../common/utils/order-revenue';
 import { PrismaService } from '../../database/prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
-
-// Orders in these statuses represent committed (not just placed-and-unpaid,
-// not cancelled/returned) business — the definition of "revenue" and "orders"
-// used throughout this dashboard.
-const COMMITTED_STATUSES: OrderStatus[] = [
-  OrderStatus.CONFIRMED,
-  OrderStatus.PACKED,
-  OrderStatus.SHIPPED,
-  OrderStatus.DELIVERED,
-];
 
 export interface DashboardSummary {
   rangeDays: number;
@@ -45,7 +36,8 @@ export class DashboardService {
     const rangeStart = new Date(now.getTime() - rangeDays * 24 * 60 * 60 * 1000);
     const previousRangeStart = new Date(rangeStart.getTime() - rangeDays * 24 * 60 * 60 * 1000);
 
-    const committedWhere: Prisma.OrderWhereInput = { status: { in: COMMITTED_STATUSES } };
+    // Shared with the reports module so both report the same revenue figure.
+    const committedWhere = committedOrderWhere;
 
     const [currentOrders, previousOrders, newCustomerCount, lowStockCount, recentOrdersRaw, topProductsRaw] =
       await Promise.all([
@@ -112,14 +104,17 @@ export class DashboardService {
     rangeEnd: Date,
   ): { date: string; revenue: number }[] {
     const buckets = new Map<string, number>();
+    // UTC throughout: orders are keyed by their UTC date below, so walking the
+    // range in local time would pre-create keys shifted by a day wherever the
+    // server isn't on UTC, and the chart would show a spurious extra day.
     const cursor = new Date(rangeStart);
-    cursor.setHours(0, 0, 0, 0);
+    cursor.setUTCHours(0, 0, 0, 0);
     const end = new Date(rangeEnd);
-    end.setHours(0, 0, 0, 0);
+    end.setUTCHours(0, 0, 0, 0);
 
     while (cursor <= end) {
       buckets.set(cursor.toISOString().slice(0, 10), 0);
-      cursor.setDate(cursor.getDate() + 1);
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
 
     for (const order of orders) {

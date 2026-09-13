@@ -63,3 +63,30 @@ export function csvRowsToRecords(rows: string[][]): Record<string, string>[] {
     return record;
   });
 }
+
+/**
+ * Serializes rows for a report download.
+ *
+ * A leading =, +, - or @ is prefixed with a single quote: spreadsheet apps
+ * treat such a cell as a formula, so an admin opening an export of
+ * customer-supplied text (a product name, a coupon description) could otherwise
+ * be running whatever that text says. Quoting defuses it while leaving the
+ * value readable.
+ */
+export function toCsvValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+
+  const raw = value instanceof Date ? value.toISOString() : String(value);
+  const defused = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+
+  return /[",\n\r]/.test(defused) ? `"${defused.replace(/"/g, '""')}"` : defused;
+}
+
+export function toCsv(headers: string[], rows: unknown[][]): string {
+  const lines = [headers.map(toCsvValue).join(',')];
+  for (const row of rows) {
+    lines.push(row.map(toCsvValue).join(','));
+  }
+  // CRLF: Excel is the overwhelmingly common consumer of these exports.
+  return `${lines.join('\r\n')}\r\n`;
+}

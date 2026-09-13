@@ -16,7 +16,9 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:deploy": "prisma migrate deploy"
+    "prisma:deploy": "prisma migrate deploy",
+    "seed:admin": "ts-node prisma/seed.ts",
+    "migrate:images": "ts-node prisma/migrate-images-to-cloudinary.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",
@@ -26,10 +28,12 @@
     "@nestjs/mapped-types": "^2.1.1",
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.4.0",
+    "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^6.1.0",
     "bcryptjs": "^2.4.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "express": "^4.22.1",
     "passport": "^0.7.0",

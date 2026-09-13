@@ -26,6 +26,12 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('Insufficient permissions');
     }
 
+    if (user.mustChangePassword) {
+      throw new ForbiddenException(
+        'Password change required on first login before accessing administrative features',
+      );
+    }
+
     return true;
   }
 }

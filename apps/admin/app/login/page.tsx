@@ -35,8 +35,12 @@ export default function AdminLoginPage() {
     setFieldErrors({});
     setSubmitting(true);
     try {
-      await login(parsed.data);
-      router.replace('/');
+      const loggedUser = await login(parsed.data);
+      if (loggedUser?.mustChangePassword) {
+        router.replace('/change-password');
+      } else {
+        router.replace('/');
+      }
     } catch (error) {
       setFormError(error instanceof ApiError ? error.message : 'Unable to sign in');
     } finally {

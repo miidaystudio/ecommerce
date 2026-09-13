@@ -1,4 +1,6 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { SENSITIVE_THROTTLE } from '../../config/throttle.config';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.type';
@@ -19,6 +21,7 @@ export class CouponsController {
    * body — and this preview grants nothing: the order flow re-validates the
    * code from scratch, so a stale or tampered preview can't affect a total. */
   @Post('preview')
+  @Throttle(SENSITIVE_THROTTLE)
   async preview(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: PreviewCouponDto,

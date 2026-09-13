@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import type { MouseEvent } from 'react';
 import type { ProductSummary } from '@ecommerce/shared-types';
@@ -7,6 +8,7 @@ import { resolveImageUrl } from '../../lib/utils/image-url';
 import { formatPrice } from '../../lib/utils/format-price';
 import { useWishlistStore } from '../../store/wishlistStore';
 import { HeartIcon } from '../ui/icons';
+import { StarRating } from '../reviews/StarRating';
 
 export function ProductCard({ product }: { product: ProductSummary }) {
   const isWishlisted = useWishlistStore((s) => s.items.some((item) => item.productId === product.id));
@@ -35,10 +37,14 @@ export function ProductCard({ product }: { product: ProductSummary }) {
     >
       <div className="relative aspect-[4/5] w-full overflow-hidden bg-surface">
         {product.image ? (
-          <img
+          <Image
             src={resolveImageUrl(product.image.url)}
             alt={product.image.altText ?? product.name}
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+            fill
+            // Two across on phones, three at md, four at lg — matching the
+            // grid so the optimizer serves the width actually displayed.
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            className="object-cover transition duration-300 group-hover:scale-105"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
@@ -48,7 +54,7 @@ export function ProductCard({ product }: { product: ProductSummary }) {
           </div>
         )}
         {!product.inStock ? (
-          <span className="absolute left-3 top-3 rounded-full bg-danger/15 px-2.5 py-1 font-mono text-2xs uppercase tracking-[0.1em] text-danger">
+          <span className="absolute left-3 top-3 rounded-full bg-danger/15 px-2.5 py-1 font-mono text-2xs uppercase tracking-[0.1em] text-danger-strong">
             Out of stock
           </span>
         ) : null}
@@ -69,6 +75,12 @@ export function ProductCard({ product }: { product: ProductSummary }) {
           <span className="text-xs text-text-secondary">{product.brand.name}</span>
         ) : null}
         <h3 className="text-base font-medium leading-snug text-text-primary">{product.name}</h3>
+        {product.ratingCount > 0 ? (
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <StarRating rating={product.ratingAverage} size="sm" />
+            <span className="font-mono text-2xs text-text-secondary">({product.ratingCount})</span>
+          </div>
+        ) : null}
         <div className="mt-1 flex items-center gap-2">
           <span className="text-base font-semibold text-text-primary">{formatPrice(product.price)}</span>
           {product.compareAtPrice ? (

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -73,10 +74,12 @@ export default function WishlistPage() {
                 className="relative block aspect-[4/5] w-full overflow-hidden bg-surface"
               >
                 {item.image ? (
-                  <img
+                  <Image
                     src={resolveImageUrl(item.image.url)}
                     alt={item.image.altText ?? item.product.name}
-                    className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                    fill
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                    className="object-cover transition duration-300 group-hover:scale-105"
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center">
@@ -86,7 +89,7 @@ export default function WishlistPage() {
                   </div>
                 )}
                 {!item.product.inStock ? (
-                  <span className="absolute left-3 top-3 rounded-full bg-danger/15 px-2.5 py-1 font-mono text-2xs uppercase tracking-[0.1em] text-danger">
+                  <span className="absolute left-3 top-3 rounded-full bg-danger/15 px-2.5 py-1 font-mono text-2xs uppercase tracking-[0.1em] text-danger-strong">
                     Out of stock
                   </span>
                 ) : null}

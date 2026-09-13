@@ -2,13 +2,14 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import { CartService } from './cart.service';
 
 describe('CartService', () => {
   let service: CartService;
 
   const prismaMock = {
-    productVariant: { findUnique: jest.fn() },
+    productVariant: { findUnique: jest.fn(), findMany: jest.fn() },
     cartItem: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
@@ -18,9 +19,20 @@ describe('CartService', () => {
     },
   };
 
+  // Echoes its inputs so the tests can see exactly what the cart priced.
+  const settingsMock = {
+    summarize: jest.fn((subtotal: number, discount: number) =>
+      Promise.resolve({ subtotal, discount, shippingFee: 0, total: subtotal, taxRatePercent: 18, taxIncluded: 0 }),
+    ),
+  };
+
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
-      providers: [CartService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        CartService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: SettingsService, useValue: settingsMock },
+      ],
     }).compile();
 
     service = moduleRef.get(CartService);
@@ -157,6 +169,60 @@ describe('CartService', () => {
       expect(cart.items[1].available).toBe(false);
       expect(cart.subtotal).toBe(350);
       expect(cart.itemCount).toBe(3);
+    });
+  });
+  describe('quote (public, for guest and signed-in carts)', () => {
+    it('prices lines from live variant prices, never from anything the client sent', async () => {
+      prismaMock.productVariant.findMany.mockResolvedValue([
+        { id: 'v1', price: 250 },
+        { id: 'v2', price: 100 },
+      ]);
+
+      await service.quote([
+        { variantId: 'v1', quantity: 2 },
+        { variantId: 'v2', quantity: 3 },
+      ]);
+
+      expect(settingsMock.summarize).toHaveBeenCalledWith(800, 0);
+    });
+
+    it('only prices ACTIVE products', async () => {
+      prismaMock.productVariant.findMany.mockResolvedValue([]);
+
+      await service.quote([{ variantId: 'v1', quantity: 1 }]);
+
+      const where = prismaMock.productVariant.findMany.mock.calls[0][0].where;
+      expect(where.product).toEqual({ status: ProductStatus.ACTIVE });
+    });
+
+    it('leaves out unknown or inactive variants instead of failing the whole quote', async () => {
+      prismaMock.productVariant.findMany.mockResolvedValue([{ id: 'v1', price: 100 }]);
+
+      await service.quote([
+        { variantId: 'v1', quantity: 1 },
+        { variantId: 'gone', quantity: 5 },
+      ]);
+
+      expect(settingsMock.summarize).toHaveBeenCalledWith(100, 0);
+    });
+
+    it('merges repeated lines for the same variant so none is priced twice as a separate line', async () => {
+      prismaMock.productVariant.findMany.mockResolvedValue([{ id: 'v1', price: 100 }]);
+
+      await service.quote([
+        { variantId: 'v1', quantity: 1 },
+        { variantId: 'v1', quantity: 2 },
+      ]);
+
+      expect(prismaMock.productVariant.findMany.mock.calls[0][0].where.id.in).toEqual(['v1']);
+      expect(settingsMock.summarize).toHaveBeenCalledWith(300, 0);
+    });
+
+    it('returns a zero quote for an empty cart without querying variants', async () => {
+      await service.quote([]);
+
+      expect(prismaMock.productVariant.findMany).not.toHaveBeenCalled();
+      expect(settingsMock.summarize).toHaveBeenCalledWith(0, 0);
     });
   });
 });

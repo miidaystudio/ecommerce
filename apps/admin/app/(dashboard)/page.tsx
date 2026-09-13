@@ -162,7 +162,7 @@ function StatCard({ label, value, trend }: { label: string; value: string; trend
       <div className="flex items-center justify-between">
         <span className="text-xs text-text-secondary">{label}</span>
         {trend !== undefined && trend !== null ? (
-          <span className={`rounded-full px-1.5 py-0.5 text-2xs ${trend >= 0 ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'}`}>
+          <span className={`rounded-full px-1.5 py-0.5 text-2xs ${trend >= 0 ? 'bg-success/15 text-success-strong' : 'bg-danger/15 text-danger-strong'}`}>
             {trend >= 0 ? '+' : ''}
             {trend.toFixed(1)}%
           </span>

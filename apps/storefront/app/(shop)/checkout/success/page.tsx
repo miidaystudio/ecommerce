@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import type { OrderDetail } from '@ecommerce/shared-types';
+import { IncludedGst } from '../../../../components/checkout/IncludedGst';
 import { Button } from '../../../../components/ui/Button';
 import { OrderStatusBadge } from '../../../../components/orders/OrderStatusBadge';
 import { ApiError } from '../../../../lib/api/client';
@@ -105,6 +106,12 @@ function CheckoutSuccessContent() {
             <span>Subtotal</span>
             <span>{formatPrice(order.subtotal)}</span>
           </div>
+          {order.discount > 0 ? (
+            <div className="flex justify-between text-success">
+              <span>Discount{order.couponCode ? ` (${order.couponCode})` : ''}</span>
+              <span>−{formatPrice(order.discount)}</span>
+            </div>
+          ) : null}
           <div className="flex justify-between text-text-secondary">
             <span>Shipping</span>
             <span>{order.shippingFee === 0 ? 'Free' : formatPrice(order.shippingFee)}</span>
@@ -113,6 +120,7 @@ function CheckoutSuccessContent() {
             <span>Total</span>
             <span>{formatPrice(order.total)}</span>
           </div>
+          <IncludedGst taxAmount={order.taxAmount} taxRatePercent={order.taxRatePercent} />
         </div>
       </div>
 

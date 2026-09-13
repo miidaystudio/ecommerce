@@ -1,17 +1,23 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Role, User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
+import { EmailService } from '../../common/email/email.service';
 import { PrismaService } from '../../database/prisma.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { ResendOtpDto } from './dto/resend-otp.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { JwtPayload } from './types/jwt-payload.type';
 
 const ADMIN_ROLES: Role[] = [Role.STAFF, Role.SUPER_ADMIN];
@@ -22,7 +28,10 @@ export interface SafeUser {
   firstName: string | null;
   lastName: string | null;
   phone: string | null;
+  phoneNumber: string | null;
   role: Role;
+  isVerified: boolean;
+  mustChangePassword: boolean;
 }
 
 export interface AuthTokens {
@@ -34,18 +43,52 @@ export interface AuthResult extends AuthTokens {
   user: SafeUser;
 }
 
+export interface RegisterResult {
+  message: string;
+  email: string;
+  requiresVerification: boolean;
+  resendAvailableIn: number;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
-  async register(dto: RegisterDto): Promise<AuthResult> {
+  async register(dto: RegisterDto): Promise<RegisterResult> {
+    const phone = this.normalizePhone(dto);
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+
     if (existing) {
-      throw new ConflictException('Email is already registered');
+      if (existing.isVerified) {
+        throw new ConflictException('Email is already registered');
+      }
+
+      // Re-registering with an unverified email updates details and issues a fresh OTP
+      const passwordHash = await bcrypt.hash(dto.password, 12);
+      const updated = await this.prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          passwordHash,
+          firstName: dto.firstName ?? existing.firstName,
+          lastName: dto.lastName ?? existing.lastName,
+          phone,
+          phoneNumber: phone,
+        },
+      });
+
+      await this.issueOtpForUser(updated);
+
+      return {
+        message: 'Registration pending verification. Please enter the OTP sent to your email.',
+        email: updated.email,
+        requiresVerification: true,
+        resendAvailableIn: 60,
+      };
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
@@ -55,12 +98,121 @@ export class AuthService {
         passwordHash,
         firstName: dto.firstName ?? null,
         lastName: dto.lastName ?? null,
-        phone: dto.phone ?? null,
+        phone,
+        phoneNumber: phone,
         role: Role.CUSTOMER,
+        isVerified: false,
       },
     });
 
-    return this.issueSession(user);
+    await this.issueOtpForUser(user);
+
+    return {
+      message: 'Registration successful. Please enter the OTP sent to your email.',
+      email: user.email,
+      requiresVerification: true,
+      resendAvailableIn: 60,
+    };
+  }
+
+  async verifyOtp(dto: VerifyOtpDto): Promise<AuthResult> {
+    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    if (!user) {
+      throw new BadRequestException('Invalid verification request');
+    }
+
+    if (user.isVerified) {
+      throw new BadRequestException('Account is already verified. Please sign in.');
+    }
+
+    const otpRecord = await this.prisma.otpVerification.findFirst({
+      where: { userId: user.id, consumedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!otpRecord) {
+      throw new BadRequestException('No active verification code found. Please request a new one.');
+    }
+
+    if (otpRecord.attempts >= otpRecord.maxAttempts) {
+      throw new BadRequestException(
+        'Maximum verification attempts exceeded. This code is locked. Please request a new code.',
+      );
+    }
+
+    if (otpRecord.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException('Verification code has expired. Please request a new code.');
+    }
+
+    const matches = this.verifyOtpHash(dto.otp, otpRecord.otpHash);
+    if (!matches) {
+      const newAttempts = otpRecord.attempts + 1;
+      await this.prisma.otpVerification.update({
+        where: { id: otpRecord.id },
+        data: { attempts: newAttempts },
+      });
+
+      const remaining = Math.max(0, otpRecord.maxAttempts - newAttempts);
+      if (remaining === 0) {
+        throw new BadRequestException(
+          'Maximum verification attempts exceeded. This code is locked. Please request a new code.',
+        );
+      }
+
+      throw new BadRequestException(
+        `Invalid verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`,
+      );
+    }
+
+    // Correct OTP: update user to verified and delete the single-use OTP
+    const [verifiedUser] = await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          isVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+      }),
+      this.prisma.otpVerification.delete({
+        where: { id: otpRecord.id },
+      }),
+    ]);
+
+    return this.issueSession(verifiedUser);
+  }
+
+  async resendOtp(dto: ResendOtpDto): Promise<{ message: string; resendAvailableIn: number }> {
+    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    if (!user) {
+      // Return success without leaking account existence
+      return {
+        message: 'If an unverified account exists for this email, a new code has been sent.',
+        resendAvailableIn: 60,
+      };
+    }
+
+    if (user.isVerified) {
+      throw new BadRequestException('Account is already verified. Please sign in.');
+    }
+
+    const activeOtp = await this.prisma.otpVerification.findFirst({
+      where: { userId: user.id, consumedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (activeOtp && activeOtp.resendAvailableAt.getTime() > Date.now()) {
+      const remainingSeconds = Math.ceil((activeOtp.resendAvailableAt.getTime() - Date.now()) / 1000);
+      throw new BadRequestException(
+        `Please wait ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'} before requesting another code.`,
+      );
+    }
+
+    await this.issueOtpForUser(user);
+
+    return {
+      message: 'A new verification code has been sent to your email.',
+      resendAvailableIn: 60,
+    };
   }
 
   async login(dto: LoginDto): Promise<AuthResult> {
@@ -118,6 +270,98 @@ export class AuthService {
     });
   }
 
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<AuthResult> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const matches = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!matches) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+
+    if (dto.newPassword === dto.currentPassword) {
+      throw new BadRequestException('New password must be different from current password');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 12);
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        mustChangePassword: false,
+      },
+    });
+
+    // Revoke all existing refresh tokens so old sessions cannot be refreshed
+    await this.prisma.refreshToken.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    return this.issueSession(updatedUser);
+  }
+
+  private async issueOtpForUser(user: { id: string; email: string }): Promise<void> {
+    const otp = this.generateOtp();
+    const otpHash = this.hashOtp(otp);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 10 * 60 * 1000); // 10 minutes
+    const resendAvailableAt = new Date(now.getTime() + 60 * 1000); // 60 seconds
+
+    await this.prisma.$transaction([
+      this.prisma.otpVerification.deleteMany({
+        where: { userId: user.id },
+      }),
+      this.prisma.otpVerification.create({
+        data: {
+          userId: user.id,
+          otpHash,
+          expiresAt,
+          resendAvailableAt,
+          attempts: 0,
+          maxAttempts: 5,
+        },
+      }),
+    ]);
+
+    await this.emailService.sendOtpEmail(user.email, otp);
+  }
+
+  private generateOtp(): string {
+    return randomInt(1000, 10000).toString();
+  }
+
+  private hashOtp(otp: string): string {
+    const secret = this.config.getOrThrow<string>('jwt.accessSecret');
+    return createHmac('sha256', secret).update(otp).digest('hex');
+  }
+
+  private verifyOtpHash(candidateOtp: string, storedHash: string): boolean {
+    const candidateHash = this.hashOtp(candidateOtp);
+    const candidateBuf = Buffer.from(candidateHash, 'hex');
+    const storedBuf = Buffer.from(storedHash, 'hex');
+    if (candidateBuf.length !== storedBuf.length) {
+      return false;
+    }
+    return timingSafeEqual(candidateBuf, storedBuf);
+  }
+
+  private normalizePhone(dto: RegisterDto): string {
+    const raw = dto.phoneNumber ?? dto.phone;
+    if (!raw || !raw.trim()) {
+      throw new BadRequestException('Phone number is required');
+    }
+    const trimmed = raw.trim();
+    const digits = trimmed.replace(/\D/g, '');
+    if (digits.length < 7 || digits.length > 15) {
+      throw new BadRequestException('Phone number must contain between 7 and 15 digits');
+    }
+    return trimmed;
+  }
+
   private async validateCredentials(email: string, password: string): Promise<User> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
@@ -129,6 +373,9 @@ export class AuthService {
     }
     if (user.isBlocked) {
       throw new ForbiddenException('Account is blocked');
+    }
+    if (!user.isVerified) {
+      throw new ForbiddenException('Account is not verified. Please verify your email with the OTP sent.');
     }
     return user;
   }
@@ -146,7 +393,12 @@ export class AuthService {
   }
 
   private async buildTokens(user: User): Promise<AuthTokens> {
-    const payload: JwtPayload = { sub: user.id, email: user.email, role: user.role };
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      mustChangePassword: user.mustChangePassword,
+    };
     const [accessToken, refreshToken] = await Promise.all([
       this.jwt.signAsync(payload, {
         secret: this.config.getOrThrow<string>('jwt.accessSecret'),
@@ -184,7 +436,10 @@ export class AuthService {
       firstName: user.firstName,
       lastName: user.lastName,
       phone: user.phone,
+      phoneNumber: user.phoneNumber ?? user.phone,
       role: user.role,
+      isVerified: user.isVerified,
+      mustChangePassword: user.mustChangePassword,
     };
   }
 }

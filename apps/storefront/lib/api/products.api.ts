@@ -33,4 +33,14 @@ export const productsApi = {
 
   getBySlug: (slug: string): Promise<ProductDetail> =>
     apiFetch<ProductDetail>(`/products/${encodeURIComponent(slug)}`),
+
+  related: (slug: string): Promise<ProductSummary[]> =>
+    apiFetch<ProductSummary[]>(`/products/${encodeURIComponent(slug)}/related`),
+
+  // Ids come from the viewer's own localStorage history, most recent first; the
+  // API caps how many it will resolve and only returns ACTIVE products.
+  recentlyViewed: (ids: string[]): Promise<ProductSummary[]> =>
+    ids.length === 0
+      ? Promise.resolve([])
+      : apiFetch<ProductSummary[]>(`/products/recently-viewed${toQueryString({ ids: ids.join(',') })}`),
 };

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { ProductSummary } from '@ecommerce/shared-types';
@@ -67,12 +68,12 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-background">
-      <div className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-4">
+      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-4 sm:gap-6 sm:px-6">
         <Link href="/" className="shrink-0 text-lg font-bold tracking-tight text-text-primary">
           miiday<span className="text-accent">.</span>
         </Link>
 
-        <div ref={containerRef} className="relative max-w-md flex-1">
+        <div ref={containerRef} className="relative min-w-0 max-w-md flex-1">
           <input
             type="search"
             value={query}
@@ -102,9 +103,12 @@ export function SiteHeader() {
                       >
                         <div className="h-10 w-8 flex-shrink-0 overflow-hidden rounded bg-surface">
                           {product.image ? (
-                            <img
+                            <Image
                               src={resolveImageUrl(product.image.url)}
                               alt=""
+                              width={32}
+                              height={40}
+                              sizes="32px"
                               className="h-full w-full object-cover"
                             />
                           ) : null}
@@ -122,7 +126,7 @@ export function SiteHeader() {
           ) : null}
         </div>
 
-        <nav className="ml-auto flex shrink-0 items-center gap-4">
+        <nav className="ml-auto flex shrink-0 items-center gap-3 sm:gap-4">
           <Link
             href="/cart"
             aria-label="Cart"
@@ -137,7 +141,7 @@ export function SiteHeader() {
           </Link>
           <Link
             href={status === 'authenticated' ? '/account' : '/login'}
-            className="text-sm font-medium text-text-primary hover:text-primary-hover"
+            className="max-w-[6rem] truncate text-sm font-medium text-text-primary hover:text-primary-hover"
           >
             {status === 'authenticated' ? (user?.firstName ?? 'Account') : 'Sign in'}
           </Link>
