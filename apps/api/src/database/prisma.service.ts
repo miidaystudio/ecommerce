@@ -5,6 +5,13 @@ import { PrismaClient } from '@prisma/client';
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
 
+  constructor() {
+    // Prisma's 5 s default is too tight when the API and database are in
+    // different regions: every query inside an interactive transaction is a
+    // full network round trip.
+    super({ transactionOptions: { maxWait: 10_000, timeout: 20_000 } });
+  }
+
   async onModuleInit(): Promise<void> {
     await this.$connect();
     this.logger.log('Prisma connected to database');

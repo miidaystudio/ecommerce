@@ -276,9 +276,19 @@ export class ProductsService {
       }
     }
 
+    if (dto.variants) {
+      const ownIds = new Set(existing.variants.map((v) => v.id));
+      if (dto.variants.some((v) => v.id && !ownIds.has(v.id))) {
+        throw new BadRequestException('Variant does not belong to this product');
+      }
+      await this.assertVariantSkusAvailable(dto.variants, id);
+    }
+
+    // Reads stay outside the transaction: a query on this.prisma inside it needs
+    // a second pooled connection, which deadlocks until the transaction times out
+    // when the pool has one connection (e.g. `connection_limit=1` on a pooler).
     const product = await this.prisma.$transaction(async (tx) => {
       if (dto.variants) {
-        await this.assertVariantSkusAvailable(dto.variants, id);
         const keepIds = dto.variants.filter((v) => v.id).map((v) => v.id!);
         await tx.productVariant.deleteMany({
           where: { productId: id, id: keepIds.length ? { notIn: keepIds } : undefined },

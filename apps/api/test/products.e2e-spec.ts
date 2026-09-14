@@ -239,6 +239,49 @@ describe('Product Catalog (e2e)', () => {
     expect(listing.body.items.some((p: { id: string }) => p.id === productId)).toBe(false);
   });
 
+  it('saves an edit that sends existing variant ids back, as the admin form does', async () => {
+    const current = await request(app.getHttpServer())
+      .get(`/api/admin/products/${productId}`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .expect(200);
+    const [first] = current.body.variants as { id: string; sku: string }[];
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/admin/products/${productId}`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({
+        name: 'Edited Tote',
+        variants: [{ id: first.id, sku: first.sku, name: 'Edited', price: 1250, stock: 7, isDefault: true }],
+      })
+      .expect(200);
+    expect(res.body.variants).toHaveLength(1);
+    expect(res.body.variants[0]).toMatchObject({ id: first.id, name: 'Edited', price: 1250, stock: 7 });
+  });
+
+  it('rejects a variant id that belongs to another product with 400, not 500', async () => {
+    const other = await prisma.product.create({
+      data: {
+        name: `Other ${stamp}`,
+        slug: `other-${stamp}`,
+        description: 'other',
+        categoryId,
+        variants: { create: [{ sku: `E2E-OTHER-${stamp}`, name: 'O', price: 10, stock: 1 }] },
+      },
+      include: { variants: true },
+    });
+    try {
+      await request(app.getHttpServer())
+        .patch(`/api/admin/products/${productId}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({ variants: [{ id: other.variants[0].id, sku: `E2E-HIJACK-${stamp}`, name: 'X', price: 1, stock: 1 }] })
+        .expect(400);
+      const untouched = await prisma.productVariant.findUniqueOrThrow({ where: { id: other.variants[0].id } });
+      expect(untouched.sku).toBe(`E2E-OTHER-${stamp}`);
+    } finally {
+      await prisma.product.delete({ where: { id: other.id } });
+    }
+  });
+
   async function getCategorySlug(): Promise<string> {
     const category = await prisma.category.findUnique({ where: { id: categoryId } });
     return category!.slug;

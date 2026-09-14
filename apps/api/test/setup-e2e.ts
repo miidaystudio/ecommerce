@@ -26,6 +26,13 @@ if (!['localhost', '127.0.0.1', '::1'].includes(databaseHost) && process.env.E2E
 
 process.env.NODE_ENV = 'test';
 
+// One pooled connection, as on a transaction pooler with `connection_limit=1`.
+// A query that escapes its interactive transaction then deadlocks and fails
+// here, instead of only in production.
+const pooled = new URL(databaseUrl);
+pooled.searchParams.set('connection_limit', '1');
+process.env.DATABASE_URL = pooled.toString();
+
 // Placeholders the suites are written against; also guarantees no real payment,
 // image or email API is called from a test run.
 process.env.RAZORPAY_KEY_ID = 'rzp_test_placeholder';
