@@ -8,7 +8,7 @@ export const loginSchema = z.object({
 export const registerSchema = z.object({
   firstName: z.string().max(50).optional(),
   lastName: z.string().max(50).optional(),
-  phone: z
+  phoneNumber: z
     .string()
     .min(1, 'Phone number is required')
     .refine((val) => {
@@ -22,6 +22,7 @@ export const registerSchema = z.object({
 export const verifyOtpSchema = z.object({
   email: z.string().email('Enter a valid email'),
   otp: z.string().regex(/^\d{4}$/, 'Enter a 4-digit code'),
+  password: z.string().min(1, 'Enter the password you registered with'),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;

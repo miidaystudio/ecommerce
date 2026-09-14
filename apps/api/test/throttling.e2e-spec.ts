@@ -136,7 +136,7 @@ describe('Rate limiting (e2e)', () => {
       const verifyAttempt = () =>
         request(app.getHttpServer())
           .post('/api/auth/verify-otp')
-          .send({ email: `nobody-${stamp}@test.com`, otp: '1234' });
+          .send({ email: `nobody-${stamp}@test.com`, otp: '1234', password: 'irrelevant1' });
 
       expect((await verifyAttempt()).status).toBe(400);
       expect((await verifyAttempt()).status).toBe(400);

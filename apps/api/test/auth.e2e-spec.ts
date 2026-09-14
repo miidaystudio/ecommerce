@@ -80,7 +80,7 @@ describe('Auth & Users (e2e)', () => {
     // 4. Verification with invalid OTP is rejected
     await agent
       .post('/api/auth/verify-otp')
-      .send({ email: customerEmail, otp: '0000' })
+      .send({ email: customerEmail, otp: '0000', password })
       .expect(400);
 
     // 5. Get the OTP intercepted by EmailService spy
@@ -92,7 +92,7 @@ describe('Auth & Users (e2e)', () => {
     // 6. Verify with valid OTP
     const verifyRes = await agent
       .post('/api/auth/verify-otp')
-      .send({ email: customerEmail, otp: otpSent })
+      .send({ email: customerEmail, otp: otpSent, password })
       .expect(200);
 
     expect(verifyRes.body.accessToken).toEqual(expect.any(String));

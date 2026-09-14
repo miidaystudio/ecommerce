@@ -11,7 +11,7 @@ import { apiFetch } from './client';
 export interface RegisterPayload {
   email: string;
   password: string;
-  phone: string;
+  phoneNumber: string;
   firstName?: string;
   lastName?: string;
 }

@@ -21,20 +21,20 @@ function RegisterForm() {
   const [registeredEmail, setRegisteredEmail] = useState(initialEmail);
   const [registeredPhone, setRegisteredPhone] = useState('');
 
-  // Step 1: Form state
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Step 2: OTP state
   const [otp, setOtp] = useState('');
+  // Held in memory only, for the verify request. A visitor arriving from the
+  // login page's "verify your account" link hasn't typed it here, so they are asked.
+  const [pendingPassword, setPendingPassword] = useState('');
   const [otpError, setOtpError] = useState('');
   const [otpSuccess, setOtpSuccess] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
   const [cooldown, setCooldown] = useState(60);
 
-  // Cooldown countdown effect
   useEffect(() => {
     if (step !== 'otp' || cooldown <= 0) return;
     const timer = setInterval(() => {
@@ -50,7 +50,7 @@ function RegisterForm() {
     const parsed = registerSchema.safeParse({
       firstName: form.get('firstName') || undefined,
       lastName: form.get('lastName') || undefined,
-      phone: form.get('phone'),
+      phoneNumber: form.get('phone'),
       email: form.get('email'),
       password: form.get('password'),
     });
@@ -67,13 +67,11 @@ function RegisterForm() {
     setFieldErrors({});
     setSubmitting(true);
     try {
-      const result = await register({
-        ...parsed.data,
-        phoneNumber: parsed.data.phone,
-      } as any);
+      const result = await register(parsed.data);
 
       setRegisteredEmail(parsed.data.email);
-      setRegisteredPhone(parsed.data.phone);
+      setRegisteredPhone(parsed.data.phoneNumber);
+      setPendingPassword(parsed.data.password);
       setCooldown(result.resendAvailableIn ?? 60);
       setOtp('');
       setOtpError('');
@@ -94,6 +92,7 @@ function RegisterForm() {
     const parsed = verifyOtpSchema.safeParse({
       email: registeredEmail,
       otp: otp.trim(),
+      password: pendingPassword,
     });
 
     if (!parsed.success) {
@@ -103,10 +102,8 @@ function RegisterForm() {
 
     setVerifying(true);
     try {
-      await verifyOtp({
-        email: registeredEmail,
-        otp: parsed.data.otp,
-      });
+      await verifyOtp(parsed.data);
+      setPendingPassword('');
       router.push('/account');
     } catch (error) {
       setOtpError(error instanceof ApiError ? error.message : 'Failed to verify code');
@@ -172,7 +169,7 @@ function RegisterForm() {
                   autoComplete="tel"
                   placeholder="+91 98765 43210"
                   defaultValue={registeredPhone}
-                  error={fieldErrors.phone}
+                  error={fieldErrors.phoneNumber}
                 />
                 <FormField
                   label="Email"
@@ -235,6 +232,18 @@ function RegisterForm() {
                     className="h-[52px] w-full rounded-[10px] border border-border bg-background px-4 text-center font-mono text-3xl font-semibold tracking-[0.35em] text-text-primary transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
+
+                {!registeredPhone ? (
+                  <FormField
+                    label="Password"
+                    id="verify-password"
+                    name="verify-password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={pendingPassword}
+                    onChange={(e) => setPendingPassword(e.target.value)}
+                  />
+                ) : null}
 
                 {otpError ? <p className="text-sm text-danger">{otpError}</p> : null}
                 {otpSuccess ? <p className="text-sm text-success-strong">{otpSuccess}</p> : null}

@@ -76,4 +76,34 @@ describe('EmailService', () => {
     expect(body.html).toContain('miiday');
     expect(body.html).toContain('#FAF9F6');
   });
+
+  it('refuses to fake-send an OTP in production when no live key is configured', async () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    const service = createService('re_placeholder_key');
+    global.fetch = jest.fn();
+    try {
+      await expect(service.sendOtpEmail('a@b.com', '1234')).rejects.toThrow('RESEND_API_KEY');
+    } finally {
+      process.env.NODE_ENV = previous;
+    }
+  });
+
+  it('throws on a Resend error without logging the response body, which can echo the code', async () => {
+    const service = createService('re_live_valid_key_123');
+    const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 422, text: async () => 'subject: ... is 4321' });
+
+    await expect(service.sendOtpEmail('a@b.com', '4321')).rejects.toThrow('HTTP 422');
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('4321');
+  });
+
+  it('keeps ordinary notifications best-effort: send() never throws', async () => {
+    const service = createService('re_live_valid_key_123');
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    global.fetch = jest.fn().mockRejectedValue(new Error('network down'));
+
+    await expect(service.send({ to: 'a@b.com', subject: 'Order confirmed', body: 'x' })).resolves.toBeUndefined();
+  });
 });

@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, Logger, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import { ThrottlerStorage, ThrottlerStorageService, getStorageToken } from '@nestjs/throttler';
@@ -15,9 +15,31 @@ describe('OTP Verification & Registration Security (e2e)', () => {
   let sendOtpSpy: jest.SpyInstance;
 
   const stamp = Date.now();
-  const testEmail = `otp_test_${stamp}@miiday.test`;
   const password = 'Password123!';
   const phone = '+91 98765 43210';
+  const email = (label: string) => `otp_test_${stamp}_${label}@miiday.test`;
+
+  const lastOtpFor = (address: string): string => {
+    const calls = sendOtpSpy.mock.calls.filter((call) => call[0] === address);
+    return calls[calls.length - 1][1] as string;
+  };
+
+  const register = (address: string, pwd = password) =>
+    request(app.getHttpServer()).post('/api/auth/register').send({ email: address, password: pwd, phoneNumber: phone });
+
+  const verify = (address: string, otp: string, pwd = password) =>
+    request(app.getHttpServer()).post('/api/auth/verify-otp').send({ email: address, otp, password: pwd });
+
+  const resend = (address: string) =>
+    request(app.getHttpServer()).post('/api/auth/resend-otp').send({ email: address });
+
+  async function expireCooldown(address: string): Promise<void> {
+    const user = await prisma.user.findUniqueOrThrow({ where: { email: address } });
+    await prisma.otpVerification.updateMany({
+      where: { userId: user.id },
+      data: { resendAvailableAt: new Date(Date.now() - 5000), updatedAt: new Date(Date.now() - 60 * 60 * 1000) },
+    });
+  }
 
   beforeAll(async () => {
     sendOtpSpy = jest.spyOn(EmailService.prototype, 'sendOtpEmail');
@@ -44,250 +66,233 @@ describe('OTP Verification & Registration Security (e2e)', () => {
     await app.close();
   });
 
-  describe('Registration and Phone Validation', () => {
-    it('rejects registration with invalid phone format', async () => {
-      const res = await request(app.getHttpServer())
+  describe('Registration and phone validation', () => {
+    it('requires a phone number', async () => {
+      await request(app.getHttpServer())
         .post('/api/auth/register')
-        .send({
-          email: `invalid_phone_${stamp}@miiday.test`,
-          password,
-          phone: '1234', // too short
-        });
-      expect(res.status).toBe(400);
+        .send({ email: email('nophone'), password })
+        .expect(400);
     });
 
-    it('creates unverified account and stores hashed OTP without leaking plaintext', async () => {
-      const res = await request(app.getHttpServer())
+    it('rejects a phone number with too few digits, even when padded with separators', async () => {
+      await request(app.getHttpServer())
         .post('/api/auth/register')
-        .send({
-          email: testEmail,
-          password,
-          phone,
-          firstName: 'Security',
-          lastName: 'Tester',
-        })
+        .send({ email: email('badphone'), password, phoneNumber: '(12) 34-5' })
+        .expect(400);
+    });
+
+    it('accepts international formats and the legacy `phone` field', async () => {
+      await register(email('intl')).expect(201);
+      await request(app.getHttpServer())
+        .post('/api/auth/register')
+        .send({ email: email('legacy'), password, phone: '+44 20 7946 0958' })
         .expect(201);
-
-      expect(res.body.requiresVerification).toBe(true);
-      expect(res.body.email).toBe(testEmail);
-      expect(res.body.resendAvailableIn).toBe(60);
-
-      // Plaintext OTP is NEVER returned in response
-      expect(res.body).not.toHaveProperty('otp');
-      expect(res.body).not.toHaveProperty('code');
-
-      // Database verification
-      const user = await prisma.user.findUnique({ where: { email: testEmail } });
-      expect(user).toBeDefined();
-      expect(user!.isVerified).toBe(false);
-      expect(user!.emailVerifiedAt).toBeNull();
-      expect(user!.phoneNumber).toBe(phone);
-
-      const otpRecord = await prisma.otpVerification.findFirst({
-        where: { userId: user!.id },
-      });
-      expect(otpRecord).toBeDefined();
-      expect(otpRecord!.attempts).toBe(0);
-      expect(otpRecord!.maxAttempts).toBe(5);
-      // Hash is 64 hex characters (SHA-256 HMAC), never 4-digit plaintext
-      expect(otpRecord!.otpHash).toHaveLength(64);
-      expect(otpRecord!.otpHash).not.toMatch(/^\d{4}$/);
     });
 
-    it('blocks login until account is verified', async () => {
+    it('creates an unverified account, stores only a hash, and never returns or logs the code', async () => {
+      const logs: string[] = [];
+      const capture = (...args: unknown[]) => {
+        logs.push(args.map(String).join(' '));
+      };
+      const spies = (['log', 'warn', 'error', 'debug', 'verbose'] as const).map((level) =>
+        jest.spyOn(Logger.prototype, level).mockImplementation(capture),
+      );
+
+      const res = await register(email('main')).expect(201);
+      spies.forEach((spy) => spy.mockRestore());
+
+      const otp = lastOtpFor(email('main'));
+      expect(res.body.requiresVerification).toBe(true);
+      expect(res.body.resendAvailableIn).toBe(60);
+      expect(JSON.stringify(res.body)).not.toContain(otp);
+      expect(logs.join('\n')).not.toContain(otp);
+
+      const user = await prisma.user.findUniqueOrThrow({ where: { email: email('main') } });
+      expect(user.isVerified).toBe(false);
+      const record = await prisma.otpVerification.findFirstOrThrow({ where: { userId: user.id } });
+      expect(record.otpHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(record.otpHash).not.toContain(otp);
+    });
+
+    it('blocks login until the account is verified', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/auth/login')
-        .send({ email: testEmail, password })
+        .send({ email: email('main'), password })
         .expect(403);
-
       expect(res.body.message).toMatch(/not verified/i);
     });
   });
 
-  describe('Brute-force resistance & Attempt lockout', () => {
-    it('increments attempts on wrong OTP and locks code after 5 consecutive failures', async () => {
-      // Find what the actual OTP was from spy
-      const lastCall = sendOtpSpy.mock.calls[sendOtpSpy.mock.calls.length - 1];
-      const realOtp = lastCall[1];
-      expect(realOtp).toMatch(/^\d{4}$/);
+  describe('Brute-force resistance', () => {
+    it('locks a code after 5 wrong attempts, after which even the right code is refused', async () => {
+      const address = email('main');
+      const realOtp = lastOtpFor(address);
+      const wrong = realOtp === '0000' ? '1111' : '0000';
 
-      // Attempt 1: wrong code
-      const r1 = await request(app.getHttpServer())
-        .post('/api/auth/verify-otp')
-        .send({ email: testEmail, otp: '0000' })
-        .expect(400);
-      expect(r1.body.message).toContain('4 attempts remaining');
-
-      // Attempt 2: wrong code
-      const r2 = await request(app.getHttpServer())
-        .post('/api/auth/verify-otp')
-        .send({ email: testEmail, otp: '0001' })
-        .expect(400);
-      expect(r2.body.message).toContain('3 attempts remaining');
-
-      // Attempt 3: wrong code
-      const r3 = await request(app.getHttpServer())
-        .post('/api/auth/verify-otp')
-        .send({ email: testEmail, otp: '0002' })
-        .expect(400);
-      expect(r3.body.message).toContain('2 attempts remaining');
-
-      // Attempt 4: wrong code
-      const r4 = await request(app.getHttpServer())
-        .post('/api/auth/verify-otp')
-        .send({ email: testEmail, otp: '0003' })
-        .expect(400);
-      expect(r4.body.message).toContain('1 attempt remaining');
-
-      // Attempt 5: locks code
-      const r5 = await request(app.getHttpServer())
-        .post('/api/auth/verify-otp')
-        .send({ email: testEmail, otp: '0004' })
-        .expect(400);
-      expect(r5.body.message).toMatch(/locked/i);
-
-      // Attempt 6 with the REAL code is now REJECTED because code is locked!
-      const r6 = await request(app.getHttpServer())
-        .post('/api/auth/verify-otp')
-        .send({ email: testEmail, otp: realOtp })
-        .expect(400);
-      expect(r6.body.message).toMatch(/locked/i);
-    });
-  });
-
-  describe('Cooldown & Resend Flow', () => {
-    it('enforces 60-second cooldown on resend', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/api/auth/resend-otp')
-        .send({ email: testEmail })
-        .expect(400);
-
-      expect(res.body.message).toMatch(/wait.*second/i);
+      for (const remaining of [4, 3, 2, 1]) {
+        const res = await verify(address, wrong).expect(400);
+        expect(res.body.message).toContain(`${remaining} attempt`);
+      }
+      expect((await verify(address, wrong).expect(400)).body.message).toMatch(/locked/i);
+      expect((await verify(address, realOtp).expect(400)).body.message).toMatch(/locked/i);
     });
 
-    it('allows resend once cooldown passes, invalidating the old locked code', async () => {
-      // Simulate cooldown expiry in DB
-      const user = await prisma.user.findUniqueOrThrow({ where: { email: testEmail } });
+    it('holds a replacement code back after a lockout, well beyond the normal cooldown', async () => {
+      const address = email('main');
+      const user = await prisma.user.findUniqueOrThrow({ where: { email: address } });
       await prisma.otpVerification.updateMany({
         where: { userId: user.id },
         data: { resendAvailableAt: new Date(Date.now() - 5000) },
       });
 
-      const res = await request(app.getHttpServer())
-        .post('/api/auth/resend-otp')
-        .send({ email: testEmail })
-        .expect(200);
+      const res = await resend(address).expect(400);
+      expect(res.body.message).toMatch(/wait (8|9)\d\d seconds/);
+    });
 
-      expect(res.body.resendAvailableIn).toBe(60);
+    it('never lets parallel guesses exceed the attempt limit', async () => {
+      const address = email('parallel');
+      await register(address).expect(201);
+      const realOtp = lastOtpFor(address);
+      const guesses = Array.from({ length: 30 }, (_, i) => String(i).padStart(4, '0')).filter((g) => g !== realOtp);
 
-      // Verify new OTP was sent
-      const lastCall = sendOtpSpy.mock.calls[sendOtpSpy.mock.calls.length - 1];
-      const newOtp = lastCall[1];
-      expect(newOtp).toMatch(/^\d{4}$/);
+      await Promise.all(guesses.map((guess) => verify(address, guess)));
 
-      // Verify attempts reset to 0 in DB
-      const freshOtp = await prisma.otpVerification.findFirstOrThrow({
-        where: { userId: user.id },
-      });
-      expect(freshOtp.attempts).toBe(0);
+      const user = await prisma.user.findUniqueOrThrow({ where: { email: address } });
+      const record = await prisma.otpVerification.findFirstOrThrow({ where: { userId: user.id } });
+      expect(record.attempts).toBe(5);
+      expect((await verify(address, realOtp).expect(400)).body.message).toMatch(/locked/i);
     });
   });
 
-  describe('Expiry handling', () => {
-    it('rejects expired OTP', async () => {
-      const user = await prisma.user.findUniqueOrThrow({ where: { email: testEmail } });
-      const lastCall = sendOtpSpy.mock.calls[sendOtpSpy.mock.calls.length - 1];
-      const currentOtp = lastCall[1];
+  describe('Cooldown and resend', () => {
+    it('enforces the resend cooldown server-side', async () => {
+      const address = email('cooldown');
+      await register(address).expect(201);
+      expect((await resend(address).expect(400)).body.message).toMatch(/wait.*second/i);
+    });
 
-      // Simulate expired timestamp
+    it('does not let re-registering bypass the cooldown', async () => {
+      const address = email('cooldown');
+      const before = sendOtpSpy.mock.calls.length;
+      await register(address).expect(201);
+      expect(sendOtpSpy.mock.calls.length).toBe(before);
+    });
+
+    it('issues a fresh code with reset attempts once the cooldown has passed', async () => {
+      const address = email('cooldown');
+      await expireCooldown(address);
+      const res = await resend(address).expect(200);
+      expect(res.body.resendAvailableIn).toBe(60);
+
+      const user = await prisma.user.findUniqueOrThrow({ where: { email: address } });
+      const record = await prisma.otpVerification.findFirstOrThrow({ where: { userId: user.id } });
+      expect(record.attempts).toBe(0);
+    });
+
+    it('answers identically for unknown and already-verified emails', async () => {
+      const unknown = await resend(email('nobody')).expect(200);
+      await prisma.user.create({
+        data: { email: email('verified'), passwordHash: 'x', isVerified: true, emailVerifiedAt: new Date() },
+      });
+      const verified = await resend(email('verified')).expect(200);
+      expect(unknown.body).toEqual(verified.body);
+    });
+  });
+
+  describe('Expiry', () => {
+    it('rejects an expired code', async () => {
+      const address = email('cooldown');
+      const user = await prisma.user.findUniqueOrThrow({ where: { email: address } });
       await prisma.otpVerification.updateMany({
         where: { userId: user.id },
         data: { expiresAt: new Date(Date.now() - 1000) },
       });
-
-      const res = await request(app.getHttpServer())
-        .post('/api/auth/verify-otp')
-        .send({ email: testEmail, otp: currentOtp })
-        .expect(400);
-
-      expect(res.body.message).toMatch(/expired/i);
+      expect((await verify(address, lastOtpFor(address)).expect(400)).body.message).toMatch(/expired/i);
     });
   });
 
-  describe('Successful verification and single-use enforcement', () => {
-    it('verifies valid code, activates account, issues session, and enforces single-use', async () => {
-      const user = await prisma.user.findUniqueOrThrow({ where: { email: testEmail } });
+  describe('Account takeover via re-registration', () => {
+    it("rejects the owner's code once someone else re-registers the email with a different password", async () => {
+      const address = email('takeover');
+      await register(address, 'VictimPass123!').expect(201);
+      const victimCode = lastOtpFor(address);
 
-      // Reset cooldown and request fresh code
-      await prisma.otpVerification.updateMany({
-        where: { userId: user.id },
-        data: { resendAvailableAt: new Date(Date.now() - 5000) },
-      });
+      await register(address, 'AttackerPass123!').expect(201);
 
-      await request(app.getHttpServer())
-        .post('/api/auth/resend-otp')
-        .send({ email: testEmail })
-        .expect(200);
+      // The inbox owner enters their code with their own password: the account
+      // must not become verified under the attacker's password.
+      await verify(address, victimCode, 'VictimPass123!').expect(400);
+      const user = await prisma.user.findUniqueOrThrow({ where: { email: address } });
+      expect(user.isVerified).toBe(false);
+    });
 
-      const latestCall = sendOtpSpy.mock.calls[sendOtpSpy.mock.calls.length - 1];
-      const freshCode = latestCall[1];
+    it('lets the owner reclaim the email by re-registering, then verify', async () => {
+      const address = email('takeover');
+      await expireCooldown(address);
+      await register(address, 'VictimPass123!').expect(201);
 
-      // Verify successfully
-      const res = await request(app.getHttpServer())
-        .post('/api/auth/verify-otp')
-        .send({ email: testEmail, otp: freshCode })
-        .expect(200);
-
-      expect(res.body.accessToken).toBeDefined();
-      expect(res.body.user.email).toBe(testEmail);
+      const res = await verify(address, lastOtpFor(address), 'VictimPass123!').expect(200);
       expect(res.body.user.isVerified).toBe(true);
-
-      const cookies = res.headers['set-cookie'] as unknown as string[];
-      expect(cookies.join(';')).toContain('refresh_token=');
-      expect(cookies.join(';')).toContain('HttpOnly');
-
-      // Database state
-      const updatedUser = await prisma.user.findUniqueOrThrow({ where: { email: testEmail } });
-      expect(updatedUser.isVerified).toBe(true);
-      expect(updatedUser.emailVerifiedAt).not.toBeNull();
-
-      // SINGLE-USE ENFORCEMENT: Re-submitting the same code now fails!
       await request(app.getHttpServer())
-        .post('/api/auth/verify-otp')
-        .send({ email: testEmail, otp: freshCode })
-        .expect(400);
-
-      // Subsequent login now works!
-      const loginRes = await request(app.getHttpServer())
         .post('/api/auth/login')
-        .send({ email: testEmail, password })
-        .expect(200);
+        .send({ email: address, password: 'AttackerPass123!' })
+        .expect(401);
+    });
+  });
 
-      expect(loginRes.body.accessToken).toBeDefined();
-      expect(loginRes.body.user.isVerified).toBe(true);
+  describe('Successful verification and single use', () => {
+    it('activates the account, issues a session, and refuses the same code again', async () => {
+      const address = email('success');
+      await register(address).expect(201);
+      const code = lastOtpFor(address);
+
+      const res = await verify(address, code).expect(200);
+      expect(res.body.accessToken).toBeDefined();
+      expect(res.body.user.isVerified).toBe(true);
+      const cookies = (res.headers['set-cookie'] as unknown as string[]).join(';');
+      expect(cookies).toContain('refresh_token=');
+      expect(cookies).toContain('HttpOnly');
+
+      await verify(address, code).expect(400);
+
+      const user = await prisma.user.findUniqueOrThrow({ where: { email: address } });
+      expect(await prisma.otpVerification.count({ where: { userId: user.id } })).toBe(0);
+
+      await request(app.getHttpServer()).post('/api/auth/login').send({ email: address, password }).expect(200);
+    });
+
+    it('lets only one of several simultaneous correct submissions succeed', async () => {
+      const address = email('double');
+      await register(address).expect(201);
+      const code = lastOtpFor(address);
+
+      const results = await Promise.all(Array.from({ length: 5 }, () => verify(address, code)));
+      expect(results.filter((r) => r.status === 200)).toHaveLength(1);
+      expect(results.every((r) => r.status === 200 || r.status === 400)).toBe(true);
     });
   });
 
   describe('Rate limiting on OTP endpoints', () => {
-    it('throttles verify-otp when request rate exceeds limit', async () => {
+    it('throttles verify-otp', async () => {
       process.env.THROTTLE_OTP_VERIFY_LIMIT = '2';
-      // 2 requests allowed
-      await request(app.getHttpServer()).post('/api/auth/verify-otp').send({ email: testEmail, otp: '1111' });
-      await request(app.getHttpServer()).post('/api/auth/verify-otp').send({ email: testEmail, otp: '1111' });
-      // 3rd gets 429
-      const res = await request(app.getHttpServer()).post('/api/auth/verify-otp').send({ email: testEmail, otp: '1111' });
-      expect(res.status).toBe(429);
-      process.env.THROTTLE_OTP_VERIFY_LIMIT = '100000';
+      try {
+        await verify(email('rl'), '1111');
+        await verify(email('rl'), '1111');
+        expect((await verify(email('rl'), '1111')).status).toBe(429);
+      } finally {
+        process.env.THROTTLE_OTP_VERIFY_LIMIT = '100000';
+      }
     });
 
-    it('throttles resend-otp when request rate exceeds limit', async () => {
+    it('throttles resend-otp', async () => {
       process.env.THROTTLE_OTP_RESEND_LIMIT = '2';
-      await request(app.getHttpServer()).post('/api/auth/resend-otp').send({ email: testEmail });
-      await request(app.getHttpServer()).post('/api/auth/resend-otp').send({ email: testEmail });
-      const res = await request(app.getHttpServer()).post('/api/auth/resend-otp').send({ email: testEmail });
-      expect(res.status).toBe(429);
-      process.env.THROTTLE_OTP_RESEND_LIMIT = '100000';
+      try {
+        await resend(email('rl'));
+        await resend(email('rl'));
+        expect((await resend(email('rl'))).status).toBe(429);
+      } finally {
+        process.env.THROTTLE_OTP_RESEND_LIMIT = '100000';
+      }
     });
   });
 });
-

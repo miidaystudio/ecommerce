@@ -38,6 +38,8 @@ export interface RegisterResponse {
 export interface VerifyOtpPayload {
   email: string;
   otp: string;
+  /** The account password: binds verification to whoever registered. */
+  password: string;
 }
 
 export interface ResendOtpPayload {

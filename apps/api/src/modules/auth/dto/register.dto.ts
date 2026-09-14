@@ -1,11 +1,9 @@
-import {
-  IsEmail,
-  IsOptional,
-  IsString,
-  Matches,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+import { IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateIf } from 'class-validator';
+
+// 7–15 digits (the E.164 maximum) with optional leading + and common separators,
+// so numbers from any country are accepted in the way people usually type them.
+const PHONE_PATTERN = /^(?=(?:\D*\d){7,15}\D*$)\+?[0-9\s\-()]{7,20}$/;
+const PHONE_MESSAGE = 'Enter a valid phone number (7-15 digits, optional country code)';
 
 export class RegisterDto {
   @IsEmail({}, { message: 'Enter a valid email address' })
@@ -26,17 +24,14 @@ export class RegisterDto {
   @MaxLength(50)
   lastName?: string;
 
-  @IsOptional()
-  @IsString()
-  @Matches(/^\+?[0-9\s\-()]{7,20}$/, {
-    message: 'Enter a valid phone number (7-15 digits, optional country code)',
-  })
+  // Required unless the older `phone` field is sent instead.
+  @ValidateIf((dto: RegisterDto) => dto.phone === undefined)
+  @IsString({ message: 'Phone number is required' })
+  @Matches(PHONE_PATTERN, { message: PHONE_MESSAGE })
   phoneNumber?: string;
 
   @IsOptional()
   @IsString()
-  @Matches(/^\+?[0-9\s\-()]{7,20}$/, {
-    message: 'Enter a valid phone number (7-15 digits, optional country code)',
-  })
+  @Matches(PHONE_PATTERN, { message: PHONE_MESSAGE })
   phone?: string;
 }

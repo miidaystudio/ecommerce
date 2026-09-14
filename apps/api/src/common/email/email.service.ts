@@ -22,55 +22,61 @@ export class EmailService {
       'miiday <onboarding@resend.dev>';
   }
 
+  /** Best-effort: order and status notifications must never fail the action that triggered them. */
   async send(message: EmailMessage): Promise<void> {
-    const isLiveKey =
-      this.apiKey &&
-      !this.apiKey.startsWith('re_placeholder') &&
-      !this.apiKey.startsWith('placeholder') &&
-      this.apiKey.trim().length > 0;
-
-    if (isLiveKey) {
-      try {
-        const res = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: this.fromEmail,
-            to: [message.to],
-            subject: message.subject,
-            text: message.body,
-            html: message.html,
-          }),
-        });
-
-        if (!res.ok) {
-          const errBody = await res.text();
-          this.logger.warn(`Failed to send email via Resend (${res.status}): ${errBody}`);
-        }
-      } catch (err) {
-        this.logger.warn(`Resend network request failed: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    } else {
-      // Security: never log the plaintext 4-digit OTP in logs.
-      const maskedSubject = message.subject.replace(/\b\d{4}\b/g, '****');
-      this.logger.log(`[email:resend-stub] To: ${message.to} | Subject: ${maskedSubject}`);
+    try {
+      await this.deliver(message);
+    } catch (err) {
+      this.logger.warn(`Email to ${message.to} not sent: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
+  /**
+   * Throws when the code can't be delivered: a customer who never receives it
+   * can't activate their account, so registration must not report success.
+   */
   async sendOtpEmail(to: string, otp: string): Promise<void> {
-    const subject = `WELCOME TO MIIDAY, your one-time-password is ${otp}`;
-    const body = `WELCOME TO MIIDAY, your one-time-password is ${otp}\n\nThis code will expire in 10 minutes. If you did not request this, please ignore this email.`;
-    const html = this.buildOtpHtml(otp);
-
-    await this.send({
+    await this.deliver({
       to,
-      subject,
-      body,
-      html,
+      subject: `WELCOME TO MIIDAY, your one-time-password is ${otp}`,
+      body: `WELCOME TO MIIDAY, your one-time-password is ${otp}\n\nThis code will expire in 10 minutes. If you did not request this, please ignore this email.`,
+      html: this.buildOtpHtml(otp),
     });
+  }
+
+  private hasLiveKey(): boolean {
+    const key = this.apiKey?.trim();
+    return Boolean(key && !key.startsWith('re_placeholder') && !key.startsWith('placeholder'));
+  }
+
+  private async deliver(message: EmailMessage): Promise<void> {
+    if (!this.hasLiveKey()) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('RESEND_API_KEY is not configured');
+      }
+      // Development stub. Digits are masked so a one-time code never lands in logs.
+      this.logger.log(`[email:stub] To: ${message.to} | Subject: ${message.subject.replace(/\d/g, '*')}`);
+      return;
+    }
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: this.fromEmail,
+        to: [message.to],
+        subject: message.subject,
+        text: message.body,
+        html: message.html,
+      }),
+    });
+
+    if (!res.ok) {
+      // Only the status: Resend's error body can quote the request, which for an
+      // OTP email contains the code.
+      this.logger.error(`Resend rejected an email to ${message.to} (HTTP ${res.status})`);
+      throw new Error(`Resend responded with HTTP ${res.status}`);
+    }
   }
 
   private buildOtpHtml(otp: string): string {
