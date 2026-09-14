@@ -1,6 +1,7 @@
 import type { AuthUser } from '@ecommerce/shared-types';
 import { create } from 'zustand';
-import { setAccessTokenProvider } from '../lib/api/client';
+import { scheduleSessionRefresh, setAccessTokenProvider, setSessionHandlers } from '../lib/api/client';
+import { clearSessionHint, setSessionHint } from '../lib/utils/session-hint';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -17,10 +18,27 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   accessToken: null,
   status: 'loading',
-  setSession: (accessToken, user) => set({ accessToken, user, status: 'authenticated' }),
-  clearSession: () => set({ accessToken: null, user: null, status: 'unauthenticated' }),
+  setSession: (accessToken, user) => {
+    scheduleSessionRefresh(accessToken);
+    set({ accessToken, user, status: 'authenticated' });
+  },
+  clearSession: () => {
+    scheduleSessionRefresh(null);
+    set({ accessToken: null, user: null, status: 'unauthenticated' });
+  },
   setStatus: (status) => set({ status }),
 }));
 
 // Access token lives in memory only (rule.md: no auth tokens in localStorage).
 setAccessTokenProvider(() => useAuthStore.getState().accessToken);
+
+setSessionHandlers({
+  onRefreshed: (session) => {
+    useAuthStore.getState().setSession(session.accessToken, session.user);
+    setSessionHint();
+  },
+  onExpired: () => {
+    clearSessionHint();
+    useAuthStore.getState().clearSession();
+  },
+});

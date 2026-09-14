@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react';
 import type { ResendOtpPayload, ResendOtpResponse, VerifyOtpPayload } from '@ecommerce/shared-types';
-import { ApiError } from '../api/client';
+import { refreshSession } from '../api/client';
 import { authApi, type LoginPayload, type RegisterPayload } from '../api/auth.api';
 import { useAuthStore } from '../../store/authStore';
 import { clearSessionHint, hasSessionHint, setSessionHint } from '../utils/session-hint';
@@ -64,25 +64,16 @@ export function useAuth() {
       return;
     }
     try {
-      const session = await authApi.refresh();
-      setSession(session.accessToken, session.user);
-      setSessionHint();
-    } catch (err) {
-      // Only a 401 means the session is really gone (expired, revoked, blocked).
+      // Resolves to null when the session is gone; refreshSession has then
+      // already cleared the hint and the store.
+      await refreshSession();
+    } catch {
       // A 429, a server error or a dropped connection says nothing about the
       // session, so the hint is kept and the next load (or a retry) restores it —
       // treating those as logged-out would sign real users out on a blip.
-      if (err instanceof ApiError && err.status === 401) {
-        clearSessionHint();
-        // Have the API clear the dead httpOnly cookie (scripts can't), and wait
-        // for it before reporting logged-out: the admin redirects to /login on
-        // that status, and its middleware — which can only decode the cookie, not
-        // verify it — would otherwise bounce the browser straight back.
-        await authApi.logout().catch(() => undefined);
-      }
       clearSession();
     }
-  }, [setSession, clearSession]);
+  }, [clearSession]);
 
   return { user, status, login, register, verifyOtp, resendOtp, logout, bootstrap };
 }
