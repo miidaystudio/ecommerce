@@ -5,46 +5,66 @@ import { useEffect } from 'react';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { hasSessionHint } from '../../lib/utils/session-hint';
 
-const PUBLIC_PATHS = new Set(['/login']);
+const LOGIN_PATH = '/login';
+const CHANGE_PASSWORD_PATH = '/change-password';
 
 /**
- * Restores the session, and holds every non-public page back until that has
- * resolved.
+ * Restores the session, holds non-public pages until that resolves, and does
+ * all auth routing: sign-in, the forced password change, and leaving /login once
+ * signed in.
  *
- * Without the hold, a page loaded directly (a reload, a deep link, or "View
- * invoice" opening in a new tab) fetched its data before the restore had put an
- * access token in memory: React runs a child's effects before its parent's, so
- * the page's request always went first, came back 401, and was never retried.
- * The storefront avoids this by having each page wait on `status`; here one
- * gate covers every admin page, including ones added later.
+ * Routing lives here rather than in the edge middleware because only this layer
+ * has the verified user — the middleware can't see the API's cookie when the
+ * API is on another site. Each redirect targets a single destination from a
+ * resolved status, so the pages can't bounce between each other.
+ *
+ * Holding pages until restore resolves also matters for data: a page loaded
+ * directly (reload, deep link, "View invoice" in a new tab) would otherwise
+ * fetch before the access token is in memory and get a 401.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { bootstrap, status } = useAuth();
+  const { bootstrap, status, user } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
-  const isPublic = PUBLIC_PATHS.has(pathname);
+
+  const onLogin = pathname === LOGIN_PATH;
+  const onChangePassword = pathname === CHANGE_PASSWORD_PATH;
+  const mustChangePassword = Boolean(user?.mustChangePassword);
+
+  // A transient failure (429, 5xx, offline) keeps the session hint — see
+  // useAuth — so it gets a retry rather than a trip to /login.
+  const sessionGone = status === 'unauthenticated' && !hasSessionHint();
+  const transientFailure = status === 'unauthenticated' && !sessionGone;
 
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
 
-  // The edge middleware only sees that a refresh cookie exists; if restoring
-  // from it fails (expired, revoked, account blocked), send the user to sign in
-  // rather than leaving a page whose every request will 401.
-  //
-  // A transient failure (429, server error, offline) leaves the session hint in
-  // place — see useAuth — so it gets a retry rather than a redirect. Redirecting
-  // would hit the middleware, which still sees the refresh cookie and sends the
-  // browser straight back here.
-  const sessionGone = status === 'unauthenticated' && !hasSessionHint();
+  const destination =
+    status === 'authenticated'
+      ? mustChangePassword
+        ? onChangePassword
+          ? null
+          : CHANGE_PASSWORD_PATH
+        : onLogin || onChangePassword
+          ? '/'
+          : null
+      : sessionGone && !onLogin
+        ? LOGIN_PATH
+        : null;
 
   useEffect(() => {
-    if (!isPublic && sessionGone) {
-      router.replace('/login');
+    if (destination) {
+      router.replace(destination);
     }
-  }, [isPublic, sessionGone, router]);
+  }, [destination, router]);
 
-  if (!isPublic && status === 'unauthenticated' && !sessionGone) {
+  if (onLogin) {
+    // The sign-in form stays usable while a restore is pending or has failed.
+    return destination ? <Holding /> : <>{children}</>;
+  }
+
+  if (transientFailure) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-4 text-center">
         <p className="text-sm text-text-primary">We couldn&apos;t restore your session just now.</p>
@@ -59,13 +79,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isPublic && status !== 'authenticated') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-sm text-text-secondary">Loading…</p>
-      </div>
-    );
+  if (status !== 'authenticated' || destination) {
+    return <Holding />;
   }
 
   return <>{children}</>;
+}
+
+function Holding() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <p className="text-sm text-text-secondary">Loading…</p>
+    </div>
+  );
 }

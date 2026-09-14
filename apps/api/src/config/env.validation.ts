@@ -117,6 +117,10 @@ class EnvironmentVariables {
   TRUST_PROXY?: string;
 
   @IsOptional()
+  @IsIn(['lax', 'strict', 'none', 'LAX', 'STRICT', 'NONE'])
+  REFRESH_COOKIE_SAMESITE?: string;
+
+  @IsOptional()
   @IsString()
   SEED_ADMIN_EMAIL?: string;
 

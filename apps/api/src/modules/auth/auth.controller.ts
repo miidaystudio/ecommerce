@@ -137,7 +137,10 @@ export class AuthController {
   ): Promise<{ success: true }> {
     const token = req.cookies?.[this.cookieName] as string | undefined;
     await this.authService.logout(token);
-    res.clearCookie(this.cookieName, { path: '/' });
+    // Must repeat the attributes the cookie was set with: browsers ignore a
+    // cross-site clearing Set-Cookie that isn't also SameSite=None; Secure.
+    const { maxAge: _maxAge, ...clearOptions } = this.buildCookieOptions();
+    res.clearCookie(this.cookieName, clearOptions);
     return { success: true };
   }
 
@@ -153,15 +156,15 @@ export class AuthController {
     return { accessToken: result.accessToken, user: result.user };
   }
 
-  private buildCookieOptions(refreshToken: string): CookieOptions {
-    const decoded = this.jwt.decode(refreshToken) as { exp?: number } | null;
-    const maxAge = decoded?.exp
-      ? Math.max(decoded.exp * 1000 - Date.now(), 0)
-      : undefined;
+  private buildCookieOptions(refreshToken?: string): CookieOptions {
+    const decoded = refreshToken ? (this.jwt.decode(refreshToken) as { exp?: number } | null) : null;
+    const maxAge = decoded?.exp ? Math.max(decoded.exp * 1000 - Date.now(), 0) : undefined;
+    const sameSite = this.config.get<'lax' | 'strict' | 'none'>('jwt.refreshCookieSameSite', 'lax');
     return {
       httpOnly: true,
-      secure: this.config.get<boolean>('jwt.cookieSecure', false),
-      sameSite: 'lax',
+      // Browsers reject SameSite=None without Secure, so None always implies it.
+      secure: sameSite === 'none' || this.config.get<boolean>('jwt.cookieSecure', false),
+      sameSite,
       path: '/',
       maxAge,
     };
