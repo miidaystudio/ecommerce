@@ -139,8 +139,7 @@ export class AuthController {
     await this.authService.logout(token);
     // Must repeat the attributes the cookie was set with: browsers ignore a
     // cross-site clearing Set-Cookie that isn't also SameSite=None; Secure.
-    const { maxAge: _maxAge, ...clearOptions } = this.buildCookieOptions();
-    res.clearCookie(this.cookieName, clearOptions);
+    res.clearCookie(this.cookieName, this.buildCookieOptions());
     return { success: true };
   }
 

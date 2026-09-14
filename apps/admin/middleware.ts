@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Soft UX gate only — the backend RolesGuard and pending-password guard are the
-// real authorization boundary.
-//
-// This deliberately does NOT read the refresh-token cookie. In production the
-// API (Render) and this app (Vercel) are different sites, so that cookie belongs
-// to the API's domain and is never visible here. Gating on it sent every
-// protected page to /login even for a signed-in admin (the /login ⇄
-// /change-password loop), and deleted the session hint as it went.
-//
-// Instead it checks the session hint this app sets on its own origin
-// (lib/utils/session-hint.ts). Role and mustChangePassword routing happen in
-// AuthProvider, which has the verified user from the API.
+// Soft UX gate only — the backend guards are the real authorization boundary.
+// It checks this app's own session hint, not the refresh cookie: in production
+// that cookie belongs to the API's site and is never visible here. Role and
+// mustChangePassword routing happen in AuthProvider.
 const HINT_COOKIE = 'miiday_admin_session';
 const PUBLIC_PATHS = new Set(['/login']);
 
