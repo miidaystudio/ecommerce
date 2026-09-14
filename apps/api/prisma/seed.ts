@@ -1,10 +1,12 @@
-import { PrismaClient, Role } from '@prisma/client';
+import { Prisma, PrismaClient, Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-// Load environment variables from apps/api/.env and workspace root .env if present
-dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
+// Values already in the environment win over .env files. Never use `override`:
+// it would silently redirect an explicit DATABASE_URL (a CI job, a local test
+// database) to whatever database the .env file names.
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 const BCRYPT_ROUNDS = 12;
@@ -23,14 +25,12 @@ async function seedAdmin(): Promise<void> {
   const email = emailRaw.trim().toLowerCase();
   const password = passwordRaw.trim();
 
-  // Basic email syntax validation
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     console.error('[seed:admin] Error: SEED_ADMIN_EMAIL does not match valid email syntax.');
     process.exit(1);
   }
 
-  // Minimum password length check
   if (password.length < 8) {
     console.error('[seed:admin] Error: SEED_ADMIN_PASSWORD must be at least 8 characters long.');
     process.exit(1);
@@ -70,6 +70,11 @@ async function seedAdmin(): Promise<void> {
       '[seed:admin] Forced password change enabled. Admin must change password upon first login.',
     );
   } catch (error) {
+    // A concurrent run created the account between the lookup and the insert.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      console.log(`[seed:admin] Account with email '${email}' already exists. Skipping creation cleanly.`);
+      return;
+    }
     console.error(
       '[seed:admin] Error executing admin seed:',
       error instanceof Error ? error.message : error,
