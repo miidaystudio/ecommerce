@@ -153,5 +153,24 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
   if (errors.length > 0) {
     throw new Error(`Invalid environment configuration:\n${errors.toString()}`);
   }
+  assertPoolerCompatible(validated.DATABASE_URL);
   return validated;
+}
+
+// Transaction-mode PgBouncer (Supabase's pooler on 6543) hands each query to
+// whichever server connection is free, so Prisma's named prepared statements
+// collide ("prepared statement \"s1\" already exists") and random queries 500.
+export function assertPoolerCompatible(databaseUrl: string): void {
+  let url: URL;
+  try {
+    url = new URL(databaseUrl);
+  } catch {
+    return;
+  }
+  if (url.port === '6543' && url.searchParams.get('pgbouncer') !== 'true') {
+    throw new Error(
+      'DATABASE_URL points at a transaction-mode connection pooler (port 6543) without ' +
+        '`pgbouncer=true`. Append `?pgbouncer=true` or use the session pooler / direct connection.',
+    );
+  }
 }
