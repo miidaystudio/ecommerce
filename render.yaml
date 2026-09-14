@@ -26,14 +26,14 @@ services:
         generateValue: true
       - key: JWT_REFRESH_SECRET
         generateValue: true
-      - key: JWT_ACCESS_EXPIRATION
+      - key: JWT_ACCESS_TTL
         value: 15m
-      - key: JWT_REFRESH_EXPIRATION
+      - key: JWT_REFRESH_TTL
         value: 7d
       - key: RESEND_API_KEY
         sync: false
-      - key: EMAIL_FROM
-        value: onboarding@resend.dev
+      - key: RESEND_FROM_EMAIL
+        value: miiday <onboarding@resend.dev>
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET

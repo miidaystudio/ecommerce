@@ -15,6 +15,10 @@ class EnvironmentVariables {
 
   @IsOptional()
   @IsString()
+  PORT?: string;
+
+  @IsOptional()
+  @IsString()
   API_GLOBAL_PREFIX?: string;
 
   @IsOptional()

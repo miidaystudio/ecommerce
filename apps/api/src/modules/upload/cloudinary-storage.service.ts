@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { v2 as cloudinary, UploadApiResponse, UploadApiErrorResponse } from 'cloudinary';
 import { randomUUID } from 'crypto';
 import { readFile } from 'fs/promises';
@@ -43,7 +49,11 @@ export class CloudinaryStorageService {
       });
       this.logger.log(`Cloudinary configured for cloud '${cloudName}'`);
     } else {
-      this.logger.warn('Cloudinary credentials not provided or placeholder. Falling back to local disk storage.');
+      this.logger.warn(
+        process.env.NODE_ENV === 'production'
+          ? 'Cloudinary credentials missing: product image uploads will be refused.'
+          : 'Cloudinary credentials not provided; using local disk storage for development.',
+      );
     }
   }
 
@@ -77,10 +87,16 @@ export class CloudinaryStorageService {
     }
 
     if (!this.isConfigured()) {
+      // Local disk is a development convenience only. On a host like Render the
+      // disk is ephemeral, so a production fallback would accept the upload and
+      // then lose the image on the next deploy or restart.
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.error('Image upload refused: Cloudinary is not configured in production');
+        throw new ServiceUnavailableException('Image storage is not configured');
+      }
       return this.localFallback.save(productId, file);
     }
 
-    // Ensure Cloudinary is configured with current env in case env vars were set dynamically
     this.configureCloudinary();
 
     return new Promise((resolve, reject) => {

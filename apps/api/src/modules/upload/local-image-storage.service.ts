@@ -15,9 +15,8 @@ const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 // path separators or traversal sequences, regardless of how it reached this service.
 const SAFE_ID_PATTERN = /^[a-zA-Z0-9-]+$/;
 
-// Stand-in for Cloudinary/S3 pending client-provided credentials (flagged in memory.md).
-// Swapping providers later only requires a new implementation of this same interface —
-// nothing outside this module (products controller/service) needs to change.
+// Development-only storage used by CloudinaryStorageService when Cloudinary is
+// unconfigured outside production.
 @Injectable()
 export class LocalImageStorageService {
   private readonly uploadsRoot = join(process.cwd(), 'uploads');

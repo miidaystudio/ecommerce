@@ -1,4 +1,4 @@
-import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, InternalServerErrorException, ServiceUnavailableException } from '@nestjs/common';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorageService } from './cloudinary-storage.service';
 
@@ -83,7 +83,6 @@ describe('CloudinaryStorageService', () => {
     const mockSecureUrl = 'https://res.cloudinary.com/test-cloud/image/upload/v12345/ecommerce/products/prod-123/abc.png';
 
     (cloudinary.uploader.upload_stream as jest.Mock).mockImplementation((_options, callback) => {
-      // Simulate writable stream
       return {
         end: () => {
           callback(null, { secure_url: mockSecureUrl, public_id: 'ecommerce/products/prod-123/abc' });
@@ -101,6 +100,13 @@ describe('CloudinaryStorageService', () => {
       }),
       expect.any(Function),
     );
+  });
+
+  it('refuses to fall back to ephemeral local disk in production when unconfigured', async () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.CLOUDINARY_API_SECRET;
+    await expect(service.save('prod-123', validFile)).rejects.toThrow(ServiceUnavailableException);
+    expect(cloudinary.uploader.upload_stream).not.toHaveBeenCalled();
   });
 
   it('handles Cloudinary upload error and throws InternalServerErrorException', async () => {
