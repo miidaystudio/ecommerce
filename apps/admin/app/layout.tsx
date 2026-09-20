@@ -1,17 +1,19 @@
 import type { Metadata } from 'next';
-import { Manrope, Inter, JetBrains_Mono } from 'next/font/google';
+import { Space_Grotesk, Space_Mono, JetBrains_Mono } from 'next/font/google';
 import { AuthProvider } from '../components/auth/AuthProvider';
 import './globals.css';
 
-const manrope = Manrope({
+const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
-  variable: '--font-manrope',
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-space-grotesk',
   display: 'swap',
 });
 
-const inter = Inter({
+const spaceMono = Space_Mono({
   subsets: ['latin'],
-  variable: '--font-inter',
+  weight: ['400', '700'],
+  variable: '--font-space-mono',
   display: 'swap',
 });
 
@@ -22,14 +24,14 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'miiday admin',
+  title: 'MIIDAY ADMIN // Operations Telemetry',
   description: 'Manage products, orders, customers, and store operations.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${manrope.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="min-h-screen bg-background text-text-primary antialiased" suppressHydrationWarning>
+    <html lang="en" className={`${spaceGrotesk.variable} ${spaceMono.variable} ${jetbrainsMono.variable}`}>
+      <body className="min-h-screen bg-[#F8F7F4] text-[#121212] antialiased font-sans selection:bg-neutral-900 selection:text-white" suppressHydrationWarning>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

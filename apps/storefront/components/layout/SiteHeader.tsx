@@ -86,7 +86,7 @@ export function SiteHeader() {
           rel="noopener noreferrer"
           className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 transition shrink-0"
         >
-          [ ADMIN DASHBOARD ↗ ]
+          ADMIN DASHBOARD ↗
         </a>
       </div>
 
@@ -118,13 +118,13 @@ export function SiteHeader() {
           {/* Desktop Navigation Links */}
           <nav className="hidden md:flex items-center gap-5 lg:gap-7 text-xs font-semibold tracking-wider text-neutral-700 font-mono">
             <Link href="/repositories" className="transition hover:text-neutral-950 uppercase hover:underline underline-offset-4">
-              [ LABS ]
+              LABS
             </Link>
             <Link href="/repositories" className="transition hover:text-neutral-950 uppercase hover:underline underline-offset-4">
-              [ REPOSITORIES ]
+              REPOSITORIES
             </Link>
             <Link href="/products" className="transition hover:text-neutral-950 uppercase hover:underline underline-offset-4">
-              [ CAPABILITIES ]
+              CAPABILITIES
             </Link>
             <a
               href="http://localhost:3001"
@@ -132,10 +132,10 @@ export function SiteHeader() {
               rel="noopener noreferrer"
               className="transition text-emerald-600 hover:text-emerald-700 font-bold uppercase hover:underline underline-offset-4"
             >
-              [ ADMIN DASHBOARD ↗ ]
+              ADMIN DASHBOARD ↗
             </a>
             <Link href="/about" className="transition hover:text-neutral-950 uppercase hover:underline underline-offset-4">
-              [ STUDIO ]
+              STUDIO
             </Link>
           </nav>
 
@@ -260,7 +260,7 @@ export function SiteHeader() {
               onClick={() => setMobileMenuOpen(false)}
               className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-emerald-400 transition flex items-center justify-between"
             >
-              <span>[ LABS ]</span>
+              <span>LABS</span>
               <span className="text-emerald-400 text-xs">EXPLORE →</span>
             </Link>
             <Link
@@ -268,7 +268,7 @@ export function SiteHeader() {
               onClick={() => setMobileMenuOpen(false)}
               className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-emerald-400 transition flex items-center justify-between"
             >
-              <span>[ REPOSITORIES ]</span>
+              <span>REPOSITORIES</span>
               <span className="text-emerald-400 text-xs">FLEET →</span>
             </Link>
             <Link
@@ -276,7 +276,7 @@ export function SiteHeader() {
               onClick={() => setMobileMenuOpen(false)}
               className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-emerald-400 transition flex items-center justify-between"
             >
-              <span>[ CAPABILITIES ]</span>
+              <span>CAPABILITIES</span>
               <span className="text-emerald-400 text-xs">CATALOG →</span>
             </Link>
             <Link
@@ -284,7 +284,7 @@ export function SiteHeader() {
               onClick={() => setMobileMenuOpen(false)}
               className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-emerald-400 transition flex items-center justify-between"
             >
-              <span>[ COMMUNITY ]</span>
+              <span>COMMUNITY</span>
               <span className="text-emerald-400 text-xs">JOIN →</span>
             </Link>
             <Link
@@ -292,7 +292,7 @@ export function SiteHeader() {
               onClick={() => setMobileMenuOpen(false)}
               className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-emerald-400 transition flex items-center justify-between"
             >
-              <span>[ STUDIO ]</span>
+              <span>STUDIO</span>
               <span className="text-emerald-400 text-xs">INFO →</span>
             </Link>
           </nav>

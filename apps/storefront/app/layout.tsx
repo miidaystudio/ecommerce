@@ -1,18 +1,21 @@
 import type { Metadata } from 'next';
-import { Manrope, Inter, JetBrains_Mono } from 'next/font/google';
+import { Space_Grotesk, Space_Mono, JetBrains_Mono } from 'next/font/google';
 import { AuthProvider } from '../components/auth/AuthProvider';
 import { SITE_URL } from '../lib/utils/site-url';
+import { SmoothScrollProvider } from '../components/providers/SmoothScrollProvider';
 import './globals.css';
 
-const manrope = Manrope({
+const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
-  variable: '--font-manrope',
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-space-grotesk',
   display: 'swap',
 });
 
-const inter = Inter({
+const spaceMono = Space_Mono({
   subsets: ['latin'],
-  variable: '--font-inter',
+  weight: ['400', '700'],
+  variable: '--font-space-mono',
   display: 'swap',
 });
 
@@ -23,26 +26,22 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  // metadataBase makes every relative canonical and OG image below resolve to
-  // an absolute URL, which both require.
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'miiday — everything for a slower home',
-    // Page titles fill the %s, so each page reads as "<page> · miiday".
-    template: '%s · miiday',
+    default: 'MIIDAY STUDIO // Digital Flagship',
+    template: '%s · MIIDAY',
   },
-  description: 'Everything for a slower home — shop across multiple product categories.',
+  description: 'Ultra-refined high-fashion editorial digital flagship.',
   alternates: { canonical: '/' },
   openGraph: {
     type: 'website',
-    siteName: 'miiday',
-    title: 'miiday — everything for a slower home',
-    description: 'Everything for a slower home — shop across multiple product categories.',
+    siteName: 'MIIDAY STUDIO',
+    title: 'MIIDAY STUDIO // Digital Flagship',
+    description: 'Ultra-refined high-fashion editorial digital flagship.',
     url: '/',
   },
   twitter: { card: 'summary_large_image' },
   robots: {
-    // Account, cart and checkout are per-user pages with nothing to index.
     index: true,
     follow: true,
   },
@@ -50,9 +49,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${manrope.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="min-h-screen bg-background text-text-primary antialiased" suppressHydrationWarning>
-        <AuthProvider>{children}</AuthProvider>
+    <html lang="en" className={`${spaceGrotesk.variable} ${spaceMono.variable} ${jetbrainsMono.variable}`}>
+      <body className="min-h-screen bg-[#F9F8F5] text-[#121212] antialiased selection:bg-neutral-900 selection:text-white font-sans" suppressHydrationWarning>
+        <AuthProvider>
+          <SmoothScrollProvider>{children}</SmoothScrollProvider>
+        </AuthProvider>
       </body>
     </html>
   );

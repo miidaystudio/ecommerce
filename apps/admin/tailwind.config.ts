@@ -58,8 +58,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['"Neue Haas Grotesk"', '"Neue Haas Grotesk Text Pro"', '"Neue Haas Grotesk Display Pro"', '"Helvetica Neue"', 'Helvetica', 'Arial', 'var(--font-manrope)', 'var(--font-inter)', 'sans-serif'],
-        mono: ['"Neue Haas Grotesk"', 'var(--font-jetbrains-mono)', 'ui-monospace', 'monospace'],
+        sans: ['var(--font-space-grotesk)', '"Space Grotesk"', '"Cabinet Grotesk"', '"Neue Haas Grotesk"', 'sans-serif'],
+        mono: ['var(--font-space-mono)', 'var(--font-jetbrains-mono)', '"Space Mono"', 'ui-monospace', 'monospace'],
       },
       fontSize: {
         '2xs': ['11px', { lineHeight: '1.4' }],

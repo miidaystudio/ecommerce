@@ -55,7 +55,7 @@ export function MobileNav() {
             className="absolute inset-0 bg-text-primary/40"
           />
 
-          <aside className="relative flex w-64 max-w-[80vw] flex-col overflow-y-auto bg-admin-sidebar-bg py-6">
+          <aside className="relative flex w-64 max-w-[80vw] flex-col overflow-y-auto bg-admin-sidebar-bg py-6 scrollbar-none">
             <div className="flex items-center gap-2.5 px-5 pb-6">
               <div className="flex h-7 w-7 items-center justify-center rounded bg-accent text-sm font-bold text-admin-sidebar-bg">
                 m
