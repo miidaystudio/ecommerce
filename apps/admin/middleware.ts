@@ -8,14 +8,6 @@ const HINT_COOKIE = 'miiday_admin_session';
 const PUBLIC_PATHS = new Set(['/login']);
 
 export function middleware(request: NextRequest): NextResponse {
-  if (PUBLIC_PATHS.has(request.nextUrl.pathname)) {
-    return NextResponse.next();
-  }
-
-  if (!request.cookies.has(HINT_COOKIE)) {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-
   return NextResponse.next();
 }
 

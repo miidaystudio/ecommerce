@@ -3,8 +3,13 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply bg-background text-text-primary font-sans antialiased selection:bg-accent/30 selection:text-text-primary;
+  :root {
+    --font-neue-haas: 'Neue Haas Grotesk', 'Neue Haas Grotesk Text Pro', 'Neue Haas Grotesk Display Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  }
+
+  html, body {
+    font-family: 'Neue Haas Grotesk', 'Neue Haas Grotesk Text Pro', 'Neue Haas Grotesk Display Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+    @apply bg-background text-text-primary antialiased selection:bg-accent/30 selection:text-text-primary;
   }
 }
 

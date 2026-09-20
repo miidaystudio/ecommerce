@@ -48,8 +48,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['var(--font-manrope)', 'var(--font-inter)', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
-        mono: ['var(--font-jetbrains-mono)', 'ui-monospace', 'monospace'],
+        sans: ['"Neue Haas Grotesk"', '"Neue Haas Grotesk Text Pro"', '"Neue Haas Grotesk Display Pro"', '"Helvetica Neue"', 'Helvetica', 'Arial', 'var(--font-manrope)', 'var(--font-inter)', 'sans-serif'],
+        mono: ['"Neue Haas Grotesk"', 'var(--font-jetbrains-mono)', 'ui-monospace', 'monospace'],
       },
       fontSize: {
         '2xs': ['11px', { lineHeight: '1.4' }],
