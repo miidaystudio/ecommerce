@@ -28,6 +28,11 @@ const nextConfig = {
         hostname: 'res.cloudinary.com',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+        pathname: '/**',
+      },
     ],
     // Matches the widths the product grid and detail image actually request,
     // so the optimizer isn't generating sizes nothing asks for.
