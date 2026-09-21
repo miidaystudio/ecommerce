@@ -14,22 +14,10 @@ interface AuthState {
   setStatus: (status: AuthStatus) => void;
 }
 
-const HARDCODED_ADMIN_USER: AuthUser = {
-  id: 'admin-super-01',
-  email: 'admin@miiday.com',
-  firstName: 'Super',
-  lastName: 'Admin',
-  role: 'SUPER_ADMIN',
-  isVerified: true,
-  mustChangePassword: false,
-  phone: null,
-  phoneNumber: null,
-};
-
 export const useAuthStore = create<AuthState>((set) => ({
-  user: HARDCODED_ADMIN_USER,
-  accessToken: 'hardcoded-dev-admin-token',
-  status: 'authenticated',
+  user: null,
+  accessToken: null,
+  status: 'loading',
   setSession: (accessToken, user) => {
     scheduleSessionRefresh(accessToken);
     set({ accessToken, user, status: 'authenticated' });
