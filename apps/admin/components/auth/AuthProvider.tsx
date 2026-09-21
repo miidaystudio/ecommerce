@@ -79,6 +79,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
+  if (status !== 'authenticated' || destination) {
+    return <Holding />;
+  }
+
   return <>{children}</>;
 }
 

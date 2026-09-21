@@ -183,7 +183,7 @@ export function SiteFooter() {
           <div className="flex items-center gap-4">
             <Link href="/policy/terms" className="hover:text-white transition">TERMS</Link>
             <span>•</span>
-            <Link href="/policy/terms" className="hover:text-white transition">PRIVACY</Link>
+            <Link href="/policy/privacy" className="hover:text-white transition">PRIVACY</Link>
             <span>•</span>
             <span className="text-emerald-400 font-bold">ENGINEERED IN INDIA // HIGH PRECISION</span>
           </div>

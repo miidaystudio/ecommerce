@@ -43,21 +43,24 @@ export function useAuth() {
   }, [clearSession]);
 
   const bootstrap = useCallback(async () => {
-    setSessionHint();
-    if (!useAuthStore.getState().user) {
-      useAuthStore.getState().setSession('hardcoded-dev-admin-token', {
-        id: 'admin-super-01',
-        email: 'admin@miiday.com',
-        firstName: 'Super',
-        lastName: 'Admin',
-        role: 'SUPER_ADMIN',
-        isVerified: true,
-        mustChangePassword: false,
-        phone: null,
-        phoneNumber: null,
-      });
+    // No hint means this browser never signed in (or signed out), so there is
+    // no refresh cookie to try — resolve straight to logged-out instead of
+    // making a request that can only 401. See lib/utils/session-hint.ts.
+    if (!hasSessionHint()) {
+      clearSession();
+      return;
     }
-  }, []);
+    try {
+      // Resolves to null when the session is gone; refreshSession has then
+      // already cleared the hint and the store.
+      await refreshSession();
+    } catch {
+      // A 429, a server error or a dropped connection says nothing about the
+      // session, so the hint is kept and the next load (or a retry) restores it —
+      // treating those as logged-out would sign real users out on a blip.
+      clearSession();
+    }
+  }, [clearSession]);
 
   return { user, status, login, logout, bootstrap, changePassword };
 }

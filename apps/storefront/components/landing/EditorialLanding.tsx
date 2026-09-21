@@ -179,25 +179,41 @@ export function EditorialLanding({ initialProducts = [] }: { initialProducts?: P
     return () => ctx.revert();
   }, []);
 
-  const handleQuickAdd = (item: typeof CATALOG_ITEMS[0]) => {
-    const priceNum = parseInt(item.price.replace(/[^\d]/g, ''), 10) || 9999;
-    addItem(
-      {
-        id: `var-${item.id}`,
-        sku: `SKU-${item.id}`,
-        name: 'Standard',
-        attributes: null,
-        price: priceNum,
-        compareAtPrice: null,
-        stock: 10,
-        isDefault: true,
-      },
-      { id: item.id, name: item.name, slug: item.slug },
-      { url: item.image, altText: item.name },
-      1,
-    );
-    setQuickAddedId(item.id);
-    setTimeout(() => setQuickAddedId(null), 1800);
+  const handleQuickAdd = async (item: (typeof displayItems)[0]) => {
+    try {
+      const product = await productsApi.getBySlug(item.slug);
+      const defaultVariant = product.variants.find((v) => v.isDefault) ?? product.variants[0];
+      if (!defaultVariant) return;
+
+      const mainImage = product.images[0];
+      await addItem(
+        defaultVariant,
+        { id: product.id, name: product.name, slug: product.slug },
+        mainImage ? { url: mainImage.url, altText: mainImage.altText } : { url: item.image, altText: item.name },
+        1,
+      );
+      setQuickAddedId(item.id);
+      setTimeout(() => setQuickAddedId(null), 1800);
+    } catch {
+      const priceNum = parseInt(item.price.replace(/[^\d]/g, ''), 10) || 9999;
+      await addItem(
+        {
+          id: item.id,
+          sku: `SKU-${item.id}`,
+          name: 'Standard',
+          attributes: null,
+          price: priceNum,
+          compareAtPrice: null,
+          stock: 10,
+          isDefault: true,
+        },
+        { id: item.id, name: item.name, slug: item.slug },
+        { url: item.image, altText: item.name },
+        1,
+      );
+      setQuickAddedId(item.id);
+      setTimeout(() => setQuickAddedId(null), 1800);
+    }
   };
 
   const filteredItems = activeTab.startsWith('ALL')
@@ -372,20 +388,26 @@ export function EditorialLanding({ initialProducts = [] }: { initialProducts?: P
               >
                 {/* Image Window */}
                 <div className="aspect-[4/5] rounded-2xl bg-[#EFECE6] overflow-hidden relative group border border-black/[0.05] shadow-2xs">
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-xs text-[10px] font-mono px-2 py-0.5 rounded-md uppercase tracking-wider font-bold text-neutral-900 border border-black/5">
+                  <Link href={`/products/${item.slug}`} className="block w-full h-full">
+                    <img
+                      src={item.image}
+                      alt={item.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  </Link>
+                  <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-xs text-[10px] font-mono px-2 py-0.5 rounded-md uppercase tracking-wider font-bold text-neutral-900 border border-black/5 pointer-events-none">
                     {item.tag}
                   </span>
 
                   {/* Quick Add Pill */}
                   <button
                     type="button"
-                    onClick={() => handleQuickAdd(item)}
-                    className="opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300 absolute bottom-3 inset-x-3 bg-neutral-950/90 backdrop-blur-md text-white font-mono text-xs py-2 rounded-xl text-center shadow-lg font-bold hover:bg-black"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void handleQuickAdd(item);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300 absolute bottom-3 inset-x-3 bg-neutral-950/90 backdrop-blur-md text-white font-mono text-xs py-2 rounded-xl text-center shadow-lg font-bold hover:bg-black z-10"
                   >
                     {quickAddedId === item.id ? '✓ ADDED TO BAG' : '[ QUICK ADD + ]'}
                   </button>
@@ -393,9 +415,9 @@ export function EditorialLanding({ initialProducts = [] }: { initialProducts?: P
 
                 {/* Info Row */}
                 <div className="mt-3 flex items-baseline justify-between font-mono">
-                  <h3 className="text-xs font-black tracking-tight uppercase text-neutral-950 truncate max-w-[70%]">
+                  <Link href={`/products/${item.slug}`} className="text-xs font-black tracking-tight uppercase text-neutral-950 truncate max-w-[70%] hover:text-emerald-600 transition-colors">
                     {item.name}
-                  </h3>
+                  </Link>
                   <span className="font-mono text-xs text-neutral-500 font-medium shrink-0">
                     {item.price}
                   </span>
@@ -445,7 +467,7 @@ export function EditorialLanding({ initialProducts = [] }: { initialProducts?: P
             <div className="lg:col-span-8 bg-[#687C49] text-[#121B0A] rounded-[2rem] p-7 sm:p-10 flex flex-col justify-between shadow-xs border border-black/[0.06]">
               <div>
                 <h2 className="text-3xl sm:text-4xl lg:text-[2.75rem] font-black uppercase tracking-[-0.03em] leading-[0.95] text-[#121B0A] max-w-xl">
-                  WE'RE CHANGING THE WAY THINGS GET MADE
+                  WE&apos;RE CHANGING THE WAY THINGS GET MADE
                 </h2>
               </div>
 
@@ -461,7 +483,7 @@ export function EditorialLanding({ initialProducts = [] }: { initialProducts?: P
                     </h4>
                   </div>
                   <p className="text-xs text-[#1E2E11]/90 leading-relaxed font-sans font-medium">
-                    We're challenging conventional retail, putting an end to dead stock, unconventional waste and more fantastic zero-waste artifacts.
+                    We&apos;re challenging conventional retail, putting an end to dead stock, unconventional waste and more fantastic zero-waste artifacts.
                   </p>
                 </div>
 
@@ -475,7 +497,7 @@ export function EditorialLanding({ initialProducts = [] }: { initialProducts?: P
                     </h4>
                   </div>
                   <p className="text-xs text-[#1E2E11]/90 leading-relaxed font-sans font-medium">
-                    We're on a mission to empower create independence in a commercial world and incredible high-fashion engineering.
+                    We&apos;re on a mission to empower create independence in a commercial world and incredible high-fashion engineering.
                   </p>
                 </div>
               </div>
