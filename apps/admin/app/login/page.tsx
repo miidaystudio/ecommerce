@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 import { FormField } from '../../components/ui/FormField';
@@ -49,28 +50,52 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center bg-admin-sidebar-bg px-4 py-12">
-      <div className="absolute left-6 top-6 flex items-center gap-2 text-sm text-admin-sidebar-text sm:left-10 sm:top-8">
-        <span className="h-2 w-2 rounded-sm bg-accent" />
-        miiday · admin
-      </div>
-      <div className="absolute bottom-6 right-6 hidden text-xs text-admin-sidebar-section-label sm:block sm:right-10 sm:bottom-8">
-        Need access? Contact your admin
+    <main className="relative flex min-h-screen flex-col items-center justify-center bg-[#F9F8F5] text-[#121212] px-6 py-12 font-sans selection:bg-neutral-900 selection:text-white">
+      
+      {/* Top Left Navigation: Back to Home */}
+      <div className="absolute left-6 top-6 sm:left-10 sm:top-8 z-10">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-wider text-neutral-600 hover:text-neutral-950 transition-colors bg-white border border-neutral-200/80 px-4 py-2 rounded-full shadow-2xs"
+        >
+          <span>←</span>
+          <span>BACK TO HOME</span>
+        </Link>
       </div>
 
-      <div className="w-full max-w-[420px] rounded-lg bg-background p-8 shadow-2xl sm:p-10">
-        <div className="mb-5 flex h-9 w-9 items-center justify-center rounded-sm bg-accent">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FAF9F6" strokeWidth="2">
-            <rect x="3" y="11" width="18" height="10" rx="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
+      {/* Top Right System Badge */}
+      <div className="absolute right-6 top-6 sm:right-10 sm:top-8 hidden sm:flex items-center gap-2 font-mono text-2xs text-neutral-400 uppercase tracking-widest">
+        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span>MIIDAY TELEMETRY // AUTH GATEWAY</span>
+      </div>
+
+      {/* Central Login Card */}
+      <div className="w-full max-w-[420px] rounded-3xl bg-white border border-neutral-200/90 p-8 sm:p-10 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+        
+        {/* Brand Badge */}
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-neutral-950">
+              <rect x="2" y="2" width="20" height="20" rx="6" fill="#121212" />
+              <path d="M7 12L10 15L17 8" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="font-black text-lg uppercase tracking-tight text-neutral-950">MIIDAY</span>
+          </div>
+          <span className="font-mono text-3xs font-black uppercase px-2 py-0.5 rounded bg-neutral-950 text-emerald-400 border border-emerald-400/30">
+            ADMIN
+          </span>
         </div>
-        <h1 className="text-xl font-semibold tracking-tight text-text-primary">Sign in to admin</h1>
-        <p className="mt-1.5 text-sm text-text-secondary">Staff and administrators only.</p>
 
-        <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4" noValidate>
+        <h1 className="text-2xl font-black uppercase tracking-tight text-neutral-950">
+          SIGN IN TO TELEMETRY
+        </h1>
+        <p className="mt-1 text-xs font-mono text-neutral-500">
+          Staff &amp; Super-Admin Operations Gateway.
+        </p>
+
+        <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4 font-mono text-xs" noValidate>
           <FormField
-            label="Email"
+            label="EMAIL ADDRESS"
             id="email"
             name="email"
             type="email"
@@ -78,27 +103,33 @@ export default function AdminLoginPage() {
             error={fieldErrors.email}
           />
           <FormField
-            label="Password"
+            label="PASSWORD"
             id="password"
             name="password"
             type="password"
             autoComplete="current-password"
             error={fieldErrors.password}
           />
-          {formError ? <p className="text-sm text-danger">{formError}</p> : null}
+
+          {formError ? (
+            <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 p-2.5 rounded-xl font-bold">{formError}</p>
+          ) : null}
+
           <button
             type="submit"
             disabled={submitting}
-            className="mt-1 h-11 rounded bg-accent text-sm font-semibold text-admin-sidebar-bg transition hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-2 h-11 w-full rounded-full bg-neutral-950 text-xs font-mono font-bold uppercase tracking-wider text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60 shadow-md"
           >
-            {submitting ? 'Signing in…' : 'Sign in'}
+            {submitting ? 'SIGNING IN…' : 'SIGN IN →'}
           </button>
         </form>
 
-        <div className="mt-6 border-t border-border pt-4 text-center font-mono text-2xs text-text-secondary">
-          STAFF · SUPER_ADMIN · endpoint /auth/admin/login
+        <div className="mt-8 border-t border-neutral-100 pt-4 text-center font-mono text-2xs text-neutral-400 uppercase tracking-widest">
+          SYSTEM AUTH GATEWAY // ROLES: STAFF, SUPER_ADMIN
         </div>
+
       </div>
+
     </main>
   );
 }

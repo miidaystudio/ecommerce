@@ -2,7 +2,8 @@ import type { ProductSummary } from '@ecommerce/shared-types';
 import { productsApi } from '../../lib/api/products.api';
 import { EditorialLanding } from '../../components/landing/EditorialLanding';
 
-export const revalidate = 60;
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function HomePage() {
   let products: ProductSummary[] = [];

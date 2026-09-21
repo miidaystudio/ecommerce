@@ -70,7 +70,7 @@ export function SiteHeader() {
   return (
     <div className="sticky top-0 z-50 w-full font-sans">
       {/* Top Announcement Strip */}
-      <div className="w-full bg-neutral-950 text-white text-[11px] font-mono py-1.5 px-4 flex items-center justify-between gap-2 tracking-wider uppercase border-b border-neutral-900">
+      <div className="w-full bg-neutral-950 text-white text-[11px] font-mono py-1.5 px-4 flex items-center justify-center gap-2 tracking-wider uppercase border-b border-neutral-900">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -80,14 +80,6 @@ export function SiteHeader() {
             MIIDAY STUDIO // ALL SYSTEMS OPERATIONAL // SHIPPING PRODUCTION ENGINES
           </span>
         </div>
-        <a
-          href="http://localhost:3001"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 transition shrink-0"
-        >
-          ADMIN DASHBOARD ↗
-        </a>
       </div>
 
       {/* Main Sticky Navbar */}
@@ -106,6 +98,11 @@ export function SiteHeader() {
             </button>
 
             <Link href="/" className="shrink-0 flex items-center gap-2 group">
+              <svg width="24" height="24" viewBox="0 0 64 64" fill="none" className="shrink-0 transition-transform group-hover:scale-105 rounded-md overflow-hidden">
+                <rect width="64" height="64" rx="14" fill="#4A4238"/>
+                <text x="29" y="44" fontFamily="Manrope, Inter, system-ui, sans-serif" fontSize="36" fontWeight="700" textAnchor="middle" fill="#F5F2EA">m</text>
+                <circle cx="50" cy="41" r="4.5" fill="#C9A876"/>
+              </svg>
               <span className="font-black tracking-tighter text-lg sm:text-xl text-neutral-950 uppercase leading-none">
                 MIIDAY
               </span>
@@ -117,25 +114,14 @@ export function SiteHeader() {
 
           {/* Desktop Navigation Links */}
           <nav className="hidden md:flex items-center gap-5 lg:gap-7 text-xs font-semibold tracking-wider text-neutral-700 font-mono">
-            <Link href="/repositories" className="transition hover:text-neutral-950 uppercase hover:underline underline-offset-4">
-              LABS
-            </Link>
-            <Link href="/repositories" className="transition hover:text-neutral-950 uppercase hover:underline underline-offset-4">
-              REPOSITORIES
-            </Link>
             <Link href="/products" className="transition hover:text-neutral-950 uppercase hover:underline underline-offset-4">
-              CAPABILITIES
+              PRODUCTS
             </Link>
-            <a
-              href="http://localhost:3001"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition text-emerald-600 hover:text-emerald-700 font-bold uppercase hover:underline underline-offset-4"
-            >
-              ADMIN DASHBOARD ↗
-            </a>
             <Link href="/about" className="transition hover:text-neutral-950 uppercase hover:underline underline-offset-4">
-              STUDIO
+              ABOUT
+            </Link>
+            <Link href="/contact" className="transition hover:text-neutral-950 uppercase hover:underline underline-offset-4">
+              CONTACT
             </Link>
           </nav>
 
@@ -256,44 +242,28 @@ export function SiteHeader() {
         <div className="md:hidden fixed inset-x-0 top-[88px] bottom-0 bg-neutral-950/80 backdrop-blur-md z-40 flex flex-col justify-between p-6 text-white border-t border-neutral-800 animate-in fade-in slide-in-from-top-2 duration-200">
           <nav className="flex flex-col gap-4 font-mono text-sm tracking-wider uppercase">
             <Link
-              href="/repositories"
-              onClick={() => setMobileMenuOpen(false)}
-              className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-emerald-400 transition flex items-center justify-between"
-            >
-              <span>LABS</span>
-              <span className="text-emerald-400 text-xs">EXPLORE →</span>
-            </Link>
-            <Link
-              href="/repositories"
-              onClick={() => setMobileMenuOpen(false)}
-              className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-emerald-400 transition flex items-center justify-between"
-            >
-              <span>REPOSITORIES</span>
-              <span className="text-emerald-400 text-xs">FLEET →</span>
-            </Link>
-            <Link
               href="/products"
               onClick={() => setMobileMenuOpen(false)}
               className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-emerald-400 transition flex items-center justify-between"
             >
-              <span>CAPABILITIES</span>
+              <span>PRODUCTS</span>
               <span className="text-emerald-400 text-xs">CATALOG →</span>
-            </Link>
-            <Link
-              href="/contact"
-              onClick={() => setMobileMenuOpen(false)}
-              className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-emerald-400 transition flex items-center justify-between"
-            >
-              <span>COMMUNITY</span>
-              <span className="text-emerald-400 text-xs">JOIN →</span>
             </Link>
             <Link
               href="/about"
               onClick={() => setMobileMenuOpen(false)}
               className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-emerald-400 transition flex items-center justify-between"
             >
-              <span>STUDIO</span>
-              <span className="text-emerald-400 text-xs">INFO →</span>
+              <span>ABOUT</span>
+              <span className="text-emerald-400 text-xs">STUDIO →</span>
+            </Link>
+            <Link
+              href="/contact"
+              onClick={() => setMobileMenuOpen(false)}
+              className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-emerald-400 transition flex items-center justify-between"
+            >
+              <span>CONTACT</span>
+              <span className="text-emerald-400 text-xs">TOUCH →</span>
             </Link>
           </nav>
 

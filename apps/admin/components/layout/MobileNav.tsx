@@ -56,11 +56,18 @@ export function MobileNav() {
           />
 
           <aside className="relative flex w-64 max-w-[80vw] flex-col overflow-y-auto bg-admin-sidebar-bg py-6 scrollbar-none">
-            <div className="flex items-center gap-2.5 px-5 pb-6">
-              <div className="flex h-7 w-7 items-center justify-center rounded bg-accent text-sm font-bold text-admin-sidebar-bg">
-                m
-              </div>
-              <span className="text-[15px] font-semibold text-admin-sidebar-text-strong">miiday admin</span>
+            <div className="flex items-center gap-2.5 px-3 pb-6">
+              <svg width="24" height="24" viewBox="0 0 64 64" fill="none" className="shrink-0 rounded-md overflow-hidden">
+                <rect width="64" height="64" rx="14" fill="#4A4238"/>
+                <text x="29" y="44" fontFamily="Manrope, Inter, system-ui, sans-serif" fontSize="36" fontWeight="700" textAnchor="middle" fill="#F5F2EA">m</text>
+                <circle cx="50" cy="41" r="4.5" fill="#C9A876"/>
+              </svg>
+              <span className="text-base font-black tracking-tight text-white uppercase leading-none">
+                MIIDAY
+              </span>
+              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono px-2 py-0.5 rounded-full uppercase">
+                ADMIN
+              </span>
             </div>
 
             {NAV_SECTIONS.map((section) => (

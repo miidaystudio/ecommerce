@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
-import { Button } from '../../../components/ui/Button';
 import { FormField } from '../../../components/ui/FormField';
 import { ApiError } from '../../../lib/api/client';
 import { useAuth } from '../../../lib/hooks/useAuth';
@@ -50,71 +49,99 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen grid-cols-1 md:grid-cols-2">
-      <div className="hidden flex-col justify-between bg-surface p-12 md:flex">
-        <span className="font-mono text-2xs uppercase tracking-[0.15em] text-text-secondary">
-          New season · linen &amp; oak
-        </span>
-        <div>
-          <p className="max-w-sm text-hero text-[40px] font-medium leading-tight tracking-tight text-text-primary">
-            Everything for a slower home.
-          </p>
-        </div>
+    <main className="relative flex min-h-screen flex-col items-center justify-center bg-[#F9F8F5] text-[#121212] px-6 py-12 font-sans selection:bg-neutral-900 selection:text-white">
+      
+      {/* Top Left Navigation: Back to Home */}
+      <div className="absolute left-6 top-6 sm:left-10 sm:top-8 z-10">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-wider text-neutral-600 hover:text-neutral-950 transition-colors bg-white border border-neutral-200/80 px-4 py-2 rounded-full shadow-2xs"
+        >
+          <span>←</span>
+          <span>BACK TO HOME</span>
+        </Link>
       </div>
 
-      <div className="flex flex-col justify-center px-6 py-16 sm:px-12 md:px-20">
-        <div className="mx-auto w-full max-w-sm">
-          <div className="mb-10 text-lg font-bold tracking-tight text-text-primary">
-            miiday<span className="text-accent">.</span>
+      {/* Top Right System Status */}
+      <div className="absolute right-6 top-6 sm:right-10 sm:top-8 hidden sm:flex items-center gap-2 font-mono text-2xs text-neutral-400 uppercase tracking-widest">
+        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span>MIIDAY STUDIO // ATELIER GATEWAY</span>
+      </div>
+
+      {/* Central Login Container */}
+      <div className="w-full max-w-[420px] rounded-3xl bg-white border border-neutral-200/90 p-8 sm:p-10 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+        
+        {/* Brand Header */}
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-neutral-950">
+              <rect x="2" y="2" width="20" height="20" rx="6" fill="#121212" />
+              <path d="M7 12L10 15L17 8" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="font-black text-lg uppercase tracking-tight text-neutral-950">MIIDAY</span>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-text-primary">Sign in</h1>
-          <p className="mt-2 text-sm text-text-secondary">
-            Access your orders, addresses, and wishlist.
-          </p>
-
-          <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-[18px]" noValidate>
-            <FormField
-              label="Email"
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              error={fieldErrors.email}
-            />
-            <FormField
-              label="Password"
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              error={fieldErrors.password}
-            />
-            {formError ? (
-              <div className="flex flex-col gap-1 text-sm text-danger">
-                <p>{formError}</p>
-                {formError.toLowerCase().includes('verif') ? (
-                  <Link
-                    href={`/register?step=otp${lastEmail ? `&email=${encodeURIComponent(lastEmail)}` : ''}`}
-                    className="font-medium underline hover:text-danger-strong"
-                  >
-                    Enter verification code
-                  </Link>
-                ) : null}
-              </div>
-            ) : null}
-            <Button type="submit" disabled={submitting} className="mt-1 w-full">
-              {submitting ? 'Signing in…' : 'Sign in'}
-            </Button>
-          </form>
-
-          <p className="mt-8 text-center text-sm text-text-secondary">
-            New here?{' '}
-            <Link href="/register" className="font-medium text-primary hover:text-primary-hover">
-              Create an account
-            </Link>
-          </p>
+          <span className="font-mono text-3xs font-black uppercase px-2 py-0.5 rounded bg-neutral-950 text-emerald-400 border border-emerald-400/30">
+            SHOP
+          </span>
         </div>
+
+        <h1 className="text-2xl font-black uppercase tracking-tight text-neutral-950">
+          SIGN IN TO ACCOUNT
+        </h1>
+        <p className="mt-1 text-xs font-mono text-neutral-500">
+          Access your orders, addresses &amp; telemetry wishlist.
+        </p>
+
+        <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4 font-mono text-xs" noValidate>
+          <FormField
+            label="EMAIL ADDRESS"
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            error={fieldErrors.email}
+          />
+          <FormField
+            label="PASSWORD"
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            error={fieldErrors.password}
+          />
+
+          {formError ? (
+            <div className="flex flex-col gap-1 text-xs text-rose-600 bg-rose-50 border border-rose-200 p-2.5 rounded-xl font-bold">
+              <p>{formError}</p>
+              {formError.toLowerCase().includes('verif') ? (
+                <Link
+                  href={`/register?step=otp${lastEmail ? `&email=${encodeURIComponent(lastEmail)}` : ''}`}
+                  className="font-medium underline hover:text-rose-800"
+                >
+                  Enter verification code
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="mt-2 h-11 w-full rounded-full bg-neutral-950 text-xs font-mono font-bold uppercase tracking-wider text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60 shadow-md"
+          >
+            {submitting ? 'SIGNING IN…' : 'SIGN IN →'}
+          </button>
+        </form>
+
+        <p className="mt-6 text-center font-mono text-xs text-neutral-500">
+          NEW HERE?{' '}
+          <Link href="/register" className="font-bold text-neutral-950 underline hover:text-emerald-600 transition-colors">
+            CREATE AN ACCOUNT
+          </Link>
+        </p>
+
       </div>
+
     </main>
   );
 }

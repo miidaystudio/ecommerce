@@ -47,6 +47,11 @@ export function Sidebar() {
       <div>
         {/* Brand Header */}
         <div className="flex items-center gap-2.5 px-3 py-2 mb-2">
+          <svg width="24" height="24" viewBox="0 0 64 64" fill="none" className="shrink-0 rounded-md overflow-hidden">
+            <rect width="64" height="64" rx="14" fill="#4A4238"/>
+            <text x="29" y="44" fontFamily="Manrope, Inter, system-ui, sans-serif" fontSize="36" fontWeight="700" textAnchor="middle" fill="#F5F2EA">m</text>
+            <circle cx="50" cy="41" r="4.5" fill="#C9A876"/>
+          </svg>
           <span className="text-base font-black tracking-tight text-white uppercase leading-none">
             MIIDAY
           </span>

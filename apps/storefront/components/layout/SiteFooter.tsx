@@ -5,25 +5,21 @@ import { useState } from 'react';
 import { ArrowUpIcon, CheckIcon } from '../ui/icons';
 
 const FLEET_LINKS = [
-  { href: '/products', label: 'Capsule Collections' },
-  { href: '/products', label: 'Archival Outerwear' },
-  { href: '/products', label: 'Tactical Ripstop' },
-  { href: '/repositories', label: 'Labs Telemetry' },
+  { href: '/products', label: 'All Products' },
+  { href: '/cart', label: 'Shopping Cart' },
+  { href: '/account', label: 'Customer Account' },
 ];
 
 const ORGANIZATION_LINKS = [
-  { href: 'http://localhost:3001', label: 'Admin Dashboard ↗' },
-  { href: '/about', label: 'Miiday Studio' },
-  { href: 'https://github.com/miidaystudio', label: 'GitHub Fleet' },
-  { href: '/about', label: 'Brand Atelier' },
+  { href: '/about', label: 'About Studio' },
+  { href: '/contact', label: 'Contact Us' },
   { href: '/policy/terms', label: 'Terms & Privacy' },
 ];
 
 const NETWORK_LINKS = [
+  { href: '/faq', label: 'FAQ' },
+  { href: '/contact', label: 'Support & Help' },
   { href: 'https://github.com/miidaystudio', label: 'GitHub ↗' },
-  { href: 'https://linkedin.com', label: 'LinkedIn ↗' },
-  { href: 'https://twitter.com', label: 'Twitter ↗' },
-  { href: 'https://instagram.com', label: 'Instagram ↗' },
 ];
 
 export function SiteFooter() {
@@ -75,7 +71,12 @@ export function SiteFooter() {
           {/* Brand Column (md:col-span-4) */}
           <div className="col-span-2 md:col-span-4 flex flex-col justify-between">
             <div>
-              <Link href="/" className="inline-block group mb-3">
+              <Link href="/" className="inline-flex items-center gap-2.5 group mb-3">
+                <svg width="26" height="26" viewBox="0 0 64 64" fill="none" className="shrink-0 transition-transform group-hover:scale-105 rounded-md overflow-hidden">
+                  <rect width="64" height="64" rx="14" fill="#4A4238"/>
+                  <text x="29" y="44" fontFamily="Manrope, Inter, system-ui, sans-serif" fontSize="36" fontWeight="700" textAnchor="middle" fill="#F5F2EA">m</text>
+                  <circle cx="50" cy="41" r="4.5" fill="#C9A876"/>
+                </svg>
                 <h2 className="text-3xl font-black uppercase tracking-tighter leading-none text-white group-hover:text-emerald-400 transition-colors">
                   MIIDAY
                 </h2>

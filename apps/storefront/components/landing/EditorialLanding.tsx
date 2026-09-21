@@ -1,17 +1,30 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import type { ProductSummary } from '@ecommerce/shared-types';
 import { useCartStore } from '../../store/cartStore';
+import { resolveImageUrl } from '../../lib/utils/image-url';
+import { formatPrice } from '../../lib/utils/format-price';
+
+import { productsApi } from '../../lib/api/products.api';
 
 if (typeof window !== 'undefined') {
   gsap.registerPlugin(ScrollTrigger);
 }
 
 const CATALOG_ITEMS = [
+  {
+    id: 'ess-9',
+    name: 'TAILORED STRUCTURED BLAZER',
+    price: '₹15,000',
+    tag: 'ATELIER 2026',
+    category: 'OUTERWEAR',
+    image: '/blazer-essential.png',
+    slug: 'tailored-structured-blazer',
+  },
   {
     id: 'ess-1',
     name: 'OVERSIZED RAW-EDGE BLAZER',
@@ -86,13 +99,57 @@ const CATALOG_ITEMS = [
   },
 ];
 
-const FILTER_TABS = ['ALL (08)', 'SUMMER 2026', 'HEADWEAR', 'OUTERWEAR'];
+const FILTER_TABS = ['ALL ESSENTIALS', 'SUMMER 2026', 'HEADWEAR', 'OUTERWEAR'];
 
 export function EditorialLanding({ initialProducts = [] }: { initialProducts?: ProductSummary[] }) {
-  const [activeTab, setActiveTab] = useState('ALL (08)');
+  const [activeTab, setActiveTab] = useState('ALL ESSENTIALS');
   const [quickAddedId, setQuickAddedId] = useState<string | null>(null);
+  const [products, setProducts] = useState<ProductSummary[]>(initialProducts);
   const addItem = useCartStore((s) => s.addItem);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    productsApi
+      .list({ sort: 'newest', pageSize: 12 })
+      .then((res) => {
+        if (!cancelled && res.items.length > 0) {
+          setProducts(res.items);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const displayItems = useMemo(() => {
+    if (products && products.length > 0) {
+      const backendItems = products.map((p) => {
+        const categoryName = p.category?.name?.toUpperCase() || 'NEW ARRIVAL';
+        let category = 'SUMMER 2026';
+        if (categoryName.includes('HEADWEAR') || categoryName.includes('CAP') || categoryName.includes('HAT')) {
+          category = 'HEADWEAR';
+        } else if (categoryName.includes('OUTERWEAR') || categoryName.includes('JACKET') || categoryName.includes('PARKA') || categoryName.includes('BLAZER')) {
+          category = 'OUTERWEAR';
+        }
+        return {
+          id: p.id,
+          name: p.name.toUpperCase(),
+          price: formatPrice(p.price),
+          tag: categoryName,
+          category,
+          image: p.image?.url ? resolveImageUrl(p.image.url) : 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=800&auto=format&fit=crop',
+          slug: p.slug,
+        };
+      });
+      if (backendItems.length < 8) {
+        return [...backendItems, ...CATALOG_ITEMS.slice(backendItems.length)];
+      }
+      return backendItems;
+    }
+    return CATALOG_ITEMS;
+  }, [products]);
 
   useEffect(() => {
     if (!rootRef.current) return;
@@ -143,9 +200,9 @@ export function EditorialLanding({ initialProducts = [] }: { initialProducts?: P
     setTimeout(() => setQuickAddedId(null), 1800);
   };
 
-  const filteredItems = activeTab === 'ALL (08)'
-    ? CATALOG_ITEMS
-    : CATALOG_ITEMS.filter((i) => i.category === activeTab);
+  const filteredItems = activeTab.startsWith('ALL')
+    ? displayItems
+    : displayItems.filter((i) => i.category === activeTab);
 
   return (
     <div ref={rootRef} className="w-full bg-[#F9F8F5] text-[#121212] font-sans">
@@ -231,11 +288,11 @@ export function EditorialLanding({ initialProducts = [] }: { initialProducts?: P
           </div>
 
           {/* Right Hero Visual */}
-          <div className="lg:col-span-6 rounded-[1.75rem] overflow-hidden relative min-h-[380px] lg:h-full max-h-[520px] bg-neutral-200 group border border-black/[0.06] shadow-sm">
+          <div className="lg:col-span-6 rounded-[1.75rem] overflow-hidden relative min-h-[420px] lg:h-full max-h-[520px] bg-[#0a0a0a] group border border-black/[0.06] shadow-sm flex items-center justify-center p-2">
             <img
-              src="https://images.unsplash.com/photo-1539109136881-3be0616acf4b?q=80&w=1200&auto=format&fit=crop"
-              alt="High fashion editorial showcase"
-              className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-700"
+              src="/hero-editorial.png"
+              alt="Miiday Studio Editorial Showcase"
+              className="w-full h-full object-contain object-center group-hover:scale-[1.02] transition-transform duration-700"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/10"></div>
 
@@ -306,9 +363,9 @@ export function EditorialLanding({ initialProducts = [] }: { initialProducts?: P
             </div>
           </div>
 
-          {/* Catalog Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-6">
-            {filteredItems.map((item) => (
+          {/* Catalog Grid (5 Cards) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-6">
+            {filteredItems.slice(0, 5).map((item) => (
               <div
                 key={item.id}
                 className="group flex flex-col justify-between"
@@ -336,7 +393,7 @@ export function EditorialLanding({ initialProducts = [] }: { initialProducts?: P
 
                 {/* Info Row */}
                 <div className="mt-3 flex items-baseline justify-between font-mono">
-                  <h3 className="text-xs sm:text-sm font-black tracking-tight uppercase text-neutral-950 truncate max-w-[70%]">
+                  <h3 className="text-xs font-black tracking-tight uppercase text-neutral-950 truncate max-w-[70%]">
                     {item.name}
                   </h3>
                   <span className="font-mono text-xs text-neutral-500 font-medium shrink-0">
@@ -346,48 +403,84 @@ export function EditorialLanding({ initialProducts = [] }: { initialProducts?: P
               </div>
             ))}
           </div>
+
+          {/* Explore More Button */}
+          <div className="mt-10 flex justify-center">
+            <Link
+              href="/products"
+              className="bg-neutral-950 hover:bg-neutral-900 text-white font-mono text-xs font-bold px-8 py-3.5 rounded-full transition-transform hover:scale-105 shadow-md flex items-center gap-2 uppercase tracking-wider"
+            >
+              <span>EXPLORE MORE PRODUCTS</span>
+              <span>↗</span>
+            </Link>
+          </div>
         </section>
 
         {/* 4. SUSTAINABILITY & ATELIER BANNERS */}
         <section className="gsap-reveal space-y-6">
           
-          {/* Banner 1: Moss Green Manifesto Block */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-            {/* Left portrait photo */}
-            <div className="lg:col-span-4 rounded-2xl h-64 overflow-hidden relative border border-black/[0.06] shadow-2xs">
+          {/* Banner 1: Sage Green Manifesto Block */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch min-h-[380px] sm:min-h-[420px]">
+            
+            {/* Left portrait photo card */}
+            <div className="lg:col-span-4 rounded-[2rem] overflow-hidden relative border border-black/[0.06] shadow-sm group min-h-[340px] lg:min-h-full bg-neutral-900">
               <img
-                src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=800&auto=format&fit=crop"
-                alt="Model portrait"
-                className="w-full h-full object-cover"
+                src="/sustainability-person.jpg"
+                alt="Miiday Atelier Craftsman"
+                className="w-full h-full object-cover object-center group-hover:scale-103 transition-transform duration-700"
               />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
+              
+              {/* Bottom-left capsule button */}
+              <Link
+                href="/about"
+                className="absolute bottom-5 left-5 bg-white/90 hover:bg-white text-neutral-950 text-xs font-mono font-bold px-4 py-2 rounded-full backdrop-blur-md transition shadow-md border border-white/40 flex items-center gap-1.5 uppercase"
+              >
+                <span>LEARN MORE</span>
+                <span>↗</span>
+              </Link>
             </div>
 
-            {/* Right moss green container */}
-            <div className="lg:col-span-8 bg-[#4E6138] text-white rounded-2xl p-7 flex flex-col justify-between h-64 shadow-xs">
+            {/* Right olive/sage green container */}
+            <div className="lg:col-span-8 bg-[#687C49] text-[#121B0A] rounded-[2rem] p-7 sm:p-10 flex flex-col justify-between shadow-xs border border-black/[0.06]">
               <div>
-                <span className="font-mono text-[10px] tracking-widest text-emerald-200 uppercase block mb-2">
-                  SUSTAINABLE MANIFESTO //
-                </span>
-                <h2 className="text-2xl font-black uppercase tracking-tight leading-tight text-white max-w-lg">
-                  WE'RE CHANGING THE WAY THINGS GET MADE.
+                <h2 className="text-3xl sm:text-4xl lg:text-[2.75rem] font-black uppercase tracking-[-0.03em] leading-[0.95] text-[#121B0A] max-w-xl">
+                  WE'RE CHANGING THE WAY THINGS GET MADE
                 </h2>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 border-t border-white/20 pt-4 font-mono text-xs">
+              {/* Bottom twin feature card */}
+              <div className="mt-8 bg-[#586A3E]/40 border border-[#485732]/30 rounded-2xl p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-6 backdrop-blur-xs">
                 <div>
-                  <h4 className="font-bold uppercase tracking-wider text-emerald-200">
-                    • SUSTAINABILITY
-                  </h4>
-                  <p className="text-2xs text-white/80 mt-1">Zero-waste craftsmanship &amp; organic weaves.</p>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="w-5 h-5 rounded-full bg-[#121B0A] text-white flex items-center justify-center font-bold text-[10px]">
+                      ✦
+                    </div>
+                    <h4 className="font-bold text-xs uppercase tracking-wider text-[#121B0A]">
+                      SUSTAINABILITY
+                    </h4>
+                  </div>
+                  <p className="text-xs text-[#1E2E11]/90 leading-relaxed font-sans font-medium">
+                    We're challenging conventional retail, putting an end to dead stock, unconventional waste and more fantastic zero-waste artifacts.
+                  </p>
                 </div>
+
                 <div>
-                  <h4 className="font-bold uppercase tracking-wider text-emerald-200">
-                    • PRECISION
-                  </h4>
-                  <p className="text-2xs text-white/80 mt-1">Tailored in limited, numbered telemetry runs.</p>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="w-5 h-5 rounded-full bg-[#121B0A] text-white flex items-center justify-center font-bold text-[10px]">
+                      ⚡
+                    </div>
+                    <h4 className="font-bold text-xs uppercase tracking-wider text-[#121B0A]">
+                      MISSION
+                    </h4>
+                  </div>
+                  <p className="text-xs text-[#1E2E11]/90 leading-relaxed font-sans font-medium">
+                    We're on a mission to empower create independence in a commercial world and incredible high-fashion engineering.
+                  </p>
                 </div>
               </div>
             </div>
+
           </div>
 
           {/* Banner 2: Full Atelier Panoramic Window */}

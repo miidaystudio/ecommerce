@@ -7,6 +7,9 @@ import { ProductFilters } from '../../../components/product/ProductFilters';
 import { SortSelect } from '../../../components/product/SortSelect';
 import { Pagination } from '../../../components/product/Pagination';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const metadata: Metadata = {
   title: 'Shop — miiday',
 };
